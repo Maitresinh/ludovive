@@ -151,10 +151,43 @@ const setResourceSchema = z.object({
 
 const eventSchema = z.object({
   type: z.string().min(1),
+  actionId: z.string().min(1).optional(),
   sourceDeviceId: z.string().min(1).optional(),
   participantId: z.string().min(1).optional(),
   payload: z.record(z.unknown()).default({})
 });
+
+const resourceDeltaEffectSchema = z.object({
+  type: z.literal("adjustResource"),
+  resource: z.string().min(1),
+  delta: z.number().int()
+});
+
+const setStateEffectSchema = z.object({
+  type: z.literal("setState"),
+  state: z.string().min(1),
+  value: z.unknown().optional()
+});
+
+const messageEffectSchema = z.object({
+  type: z.literal("message"),
+  visibility: z.string().optional()
+});
+
+const revealContactHintEffectSchema = z.object({
+  type: z.literal("revealContactHint"),
+  precision: z.string().min(1)
+});
+
+const knownEffectSchema = z.discriminatedUnion("type", [
+  resourceDeltaEffectSchema,
+  setStateEffectSchema,
+  messageEffectSchema,
+  revealContactHintEffectSchema
+]);
+
+type KnownEffect = z.infer<typeof knownEffectSchema>;
+type EventInput = z.infer<typeof eventSchema>;
 
 function modulesDir(): string {
   return path.resolve(process.cwd(), "../../modules/examples");
@@ -191,6 +224,114 @@ function currentPhase(session: Session): z.infer<typeof phaseSchema> {
 
 function audit(session: Session, type: string, payload: unknown): void {
   session.audit.push({ at: new Date().toISOString(), type, payload });
+}
+
+function resourceBounds(module: GameModule, resourceId: string): { min: number; max: number } | undefined {
+  const resource = module.resources.find((candidate) => candidate.id === resourceId);
+  if (!resource) {
+    return undefined;
+  }
+  return {
+    min: resource.min ?? Number.NEGATIVE_INFINITY,
+    max: resource.max ?? Number.POSITIVE_INFINITY
+  };
+}
+
+function assertResourceChange(module: GameModule, participant: Participant, resourceId: string, delta: number): void {
+  const bounds = resourceBounds(module, resourceId);
+  if (!bounds) {
+    throw new Error(`Unknown resource: ${resourceId}`);
+  }
+
+  const current = participant.resources[resourceId] ?? bounds.min;
+  const next = current + delta;
+  if (next < bounds.min || next > bounds.max) {
+    throw new Error(`Resource ${resourceId} would be outside bounds`);
+  }
+}
+
+function adjustResource(module: GameModule, participant: Participant, resourceId: string, delta: number): { resourceId: string; before: number; after: number } {
+  assertResourceChange(module, participant, resourceId, delta);
+  const bounds = resourceBounds(module, resourceId);
+  if (!bounds) {
+    throw new Error(`Unknown resource: ${resourceId}`);
+  }
+  const before = participant.resources[resourceId] ?? bounds.min;
+  const after = before + delta;
+  participant.resources[resourceId] = after;
+  return { resourceId, before, after };
+}
+
+function applyEffect(module: GameModule, participant: Participant, effect: KnownEffect, event: EventInput): Record<string, unknown> {
+  if (effect.type === "adjustResource") {
+    return {
+      type: effect.type,
+      ...adjustResource(module, participant, effect.resource, effect.delta)
+    };
+  }
+
+  if (effect.type === "setState") {
+    const value = effect.value ?? event.payload.value ?? true;
+    const before = participant.statuses[effect.state];
+    participant.statuses[effect.state] = value;
+    return { type: effect.type, state: effect.state, before, after: value };
+  }
+
+  if (effect.type === "message") {
+    participant.statuses.lastMessage = {
+      visibility: effect.visibility ?? "private",
+      text: typeof event.payload.text === "string" ? event.payload.text : ""
+    };
+    return { type: effect.type, visibility: effect.visibility ?? "private" };
+  }
+
+  participant.statuses.contactHint = {
+    precision: effect.precision,
+    hint: typeof event.payload.hint === "string" ? event.payload.hint : undefined
+  };
+  return { type: effect.type, precision: effect.precision };
+}
+
+function applyActionEvent(session: Session, event: EventInput): Record<string, unknown> | undefined {
+  const actionId = event.actionId ?? (typeof event.payload.actionId === "string" ? event.payload.actionId : undefined);
+  if (!actionId) {
+    return undefined;
+  }
+
+  const module = getModuleOrThrow(session.moduleId);
+  const action = module.actions.find((candidate) => candidate.id === actionId);
+  if (!action) {
+    throw new Error(`Unknown action: ${actionId}`);
+  }
+  if (!event.participantId) {
+    throw new Error("Action event requires participantId");
+  }
+
+  const participant = session.participants.find((candidate) => candidate.id === event.participantId);
+  if (!participant) {
+    throw new Error("Unknown participant");
+  }
+  if (action.actor !== "*" && participant.roleId !== action.actor) {
+    throw new Error(`Action ${actionId} is not allowed for participant role`);
+  }
+  if (action.phase !== "*" && action.phase !== currentPhase(session).id) {
+    throw new Error(`Action ${actionId} is not allowed during current phase`);
+  }
+
+  for (const [resourceId, cost] of Object.entries(action.cost ?? {})) {
+    assertResourceChange(module, participant, resourceId, -cost);
+  }
+
+  const appliedCosts = Object.entries(action.cost ?? {}).map(([resourceId, cost]) => adjustResource(module, participant, resourceId, -cost));
+  const parsedEffect = knownEffectSchema.safeParse(action.effect);
+  const appliedEffect = parsedEffect.success ? applyEffect(module, participant, parsedEffect.data, event) : { type: "unsupported", effect: action.effect };
+
+  return {
+    actionId,
+    participantId: participant.id,
+    costs: appliedCosts,
+    effect: appliedEffect
+  };
 }
 
 function minimalReadModel(session: Session): Record<string, unknown> {
@@ -687,16 +828,26 @@ app.post("/sessions/:code/events", async (request, reply) => {
     return reply.code(400).send({ error: "Unknown participant" });
   }
 
+  let actionResult: Record<string, unknown> | undefined;
+  try {
+    actionResult = applyActionEvent(session, event);
+  } catch (error) {
+    return reply.code(400).send({ error: error instanceof Error ? error.message : "Event rejected" });
+  }
+
   audit(session, event.type, {
+    actionId: event.actionId,
     sourceDeviceId: event.sourceDeviceId,
     participantId: event.participantId,
-    payload: event.payload
+    payload: event.payload,
+    actionResult
   });
   broadcast(session, "event.accepted", session.audit.at(-1));
 
   return reply.code(202).send({
     accepted: true,
     audit: session.audit.at(-1),
+    actionResult,
     dashboard: dashboardReadModel(session)
   });
 });

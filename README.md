@@ -71,6 +71,15 @@ Sprint 1 focuses on the generic transmission loop. The API now also exposes:
 
 Live clients receive a read model filtered for their audience: dashboard clients receive the full dashboard state, unbound devices receive a minimal public pairing state, and bound devices receive their participant-specific state.
 
+Structured events can also execute module actions by sending `actionId` to `POST /sessions/:code/events`. The prototype currently validates role, phase, resource costs, and applies the first supported effects: `adjustResource`, `setState`, `message`, and `revealContactHint`.
+
+Run the server tests with:
+
+```bash
+cd apps/server
+npm test
+```
+
 The Android app is a native skeleton. Open `apps/android` in Android Studio after installing Android Studio/Gradle tooling.
 
 ## GitHub

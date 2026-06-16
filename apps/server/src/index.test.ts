@@ -34,6 +34,14 @@ async function bindDevice(code: string, deviceId: string, participantId: string)
   return injectJson("POST", `/sessions/${code}/devices/${deviceId}/bind`, { participantId });
 }
 
+async function setResource(code: string, participantId: string, resourceId: string, value: number): Promise<JsonObject> {
+  return injectJson("POST", `/sessions/${code}/players/${participantId}/resources`, { resourceId, value });
+}
+
+async function advancePhase(code: string): Promise<JsonObject> {
+  return injectJson("POST", `/sessions/${code}/phases/advance`, {});
+}
+
 function collectLiveMessages(url: string, expectedCount = 2): Promise<{ socket: WebSocket; messages: JsonObject[] }> {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(url);
@@ -132,6 +140,113 @@ test("rejects structured events from unknown devices or participants", async () 
   });
   assert.equal(unknownParticipant.statusCode, 400);
   assert.equal(unknownParticipant.json<JsonObject>().error, "Unknown participant");
+});
+
+test("applies configured action costs and resource effects", async () => {
+  const session = await createSession();
+  const code = session.code;
+  const device = await createDevice(code, "Telephone machine");
+  const participant = await createParticipant(code, "Machiniste", "engineer");
+  await bindDevice(code, device.device.id, participant.participant.id);
+  await setResource(code, participant.participant.id, "battery", 2);
+  await setResource(code, participant.participant.id, "noise", 4);
+  await advancePhase(code);
+
+  const actionResponse = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/events`,
+    payload: {
+      type: "action.perform",
+      actionId: "quiet-engines",
+      sourceDeviceId: device.device.id,
+      participantId: participant.participant.id
+    }
+  });
+
+  assert.equal(actionResponse.statusCode, 202);
+  const body = actionResponse.json<JsonObject>();
+  const updatedParticipant = body.dashboard.participants.find((candidate: JsonObject) => candidate.id === participant.participant.id);
+  assert.equal(updatedParticipant.resources.battery, 1);
+  assert.equal(updatedParticipant.resources.noise, 2);
+  assert.equal(body.actionResult.effect.type, "adjustResource");
+});
+
+test("applies configured action state effects from payload", async () => {
+  const session = await createSession();
+  const code = session.code;
+  const device = await createDevice(code, "Telephone pilote");
+  const participant = await createParticipant(code, "Pilote", "helmsman");
+  await bindDevice(code, device.device.id, participant.participant.id);
+  await setResource(code, participant.participant.id, "battery", 2);
+  await advancePhase(code);
+
+  const actionResponse = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/events`,
+    payload: {
+      type: "action.perform",
+      actionId: "change-depth",
+      sourceDeviceId: device.device.id,
+      participantId: participant.participant.id,
+      payload: { value: "periscope-depth" }
+    }
+  });
+
+  assert.equal(actionResponse.statusCode, 202);
+  const body = actionResponse.json<JsonObject>();
+  const updatedParticipant = body.dashboard.participants.find((candidate: JsonObject) => candidate.id === participant.participant.id);
+  assert.equal(updatedParticipant.resources.battery, 1);
+  assert.equal(updatedParticipant.statuses.depth, "periscope-depth");
+});
+
+test("rejects configured actions when role, phase, or resources do not allow them", async () => {
+  const session = await createSession();
+  const code = session.code;
+  const device = await createDevice(code, "Telephone sonar");
+  const participant = await createParticipant(code, "Station sonar", "sonar");
+  await bindDevice(code, device.device.id, participant.participant.id);
+
+  const wrongPhase = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/events`,
+    payload: {
+      type: "action.perform",
+      actionId: "sonar-sweep",
+      sourceDeviceId: device.device.id,
+      participantId: participant.participant.id
+    }
+  });
+  assert.equal(wrongPhase.statusCode, 400);
+  assert.match(wrongPhase.json<JsonObject>().error, /current phase/);
+
+  await advancePhase(code);
+  await advancePhase(code);
+  const noBattery = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/events`,
+    payload: {
+      type: "action.perform",
+      actionId: "sonar-sweep",
+      sourceDeviceId: device.device.id,
+      participantId: participant.participant.id
+    }
+  });
+  assert.equal(noBattery.statusCode, 400);
+  assert.match(noBattery.json<JsonObject>().error, /outside bounds/);
+
+  const captain = await createParticipant(code, "Capitaine", "captain");
+  const wrongRole = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/events`,
+    payload: {
+      type: "action.perform",
+      actionId: "sonar-sweep",
+      sourceDeviceId: device.device.id,
+      participantId: captain.participant.id
+    }
+  });
+  assert.equal(wrongRole.statusCode, 400);
+  assert.match(wrongRole.json<JsonObject>().error, /not allowed for participant role/);
 });
 
 test("broadcasts live updates with read models filtered per audience", async () => {

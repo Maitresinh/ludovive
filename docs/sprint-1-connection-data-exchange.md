@@ -59,8 +59,12 @@ As a connected device, I can send a structured event.
 Acceptance criteria:
 
 - Event has `type`, optional `sourceDeviceId`, optional `participantId`, and `payload`.
+- Event can include `actionId` to execute a module action.
 - Unknown source device is rejected.
 - Unknown participant is rejected.
+- Unknown action is rejected.
+- Action role, phase, and resource costs are validated.
+- Supported action effects update participant resources or statuses.
 - Accepted event is added to audit.
 - Server returns the dashboard read model after acceptance.
 

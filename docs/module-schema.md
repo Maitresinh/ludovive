@@ -72,3 +72,21 @@ This is the first conceptual schema for importable Thaumacord modules.
 }
 ```
 
+## Supported Action Execution In Prototype
+
+`POST /sessions/:code/events` accepts an optional top-level `actionId`.
+
+When `actionId` is present, the server currently checks:
+
+- the action exists in the imported module;
+- the event has a valid `participantId`;
+- the participant role matches `action.actor`;
+- the current phase matches `action.phase`, unless the action phase is `*`;
+- resource costs can be paid without crossing resource bounds.
+
+Supported effects:
+
+- `adjustResource`: adds `delta` to a participant resource;
+- `setState`: writes a value to participant `statuses`;
+- `message`: stores a simple last message status;
+- `revealContactHint`: stores a contact hint status.
