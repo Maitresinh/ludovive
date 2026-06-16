@@ -35,7 +35,7 @@ The gap for Thaumacord is not "can an app run Werewolf?" but:
 - structured GM dashboard and audit log;
 - later AI help that respects hidden information.
 
-### Character sheets and GM dashboards
+### Table-first character sheets and GM dashboards
 
 There are many sheet tools and VTTs:
 
@@ -56,7 +56,9 @@ They usually solve:
 - sharing sheets with a GM or campaign;
 - sometimes live sync or VTT integration.
 
-The repeated gap is ergonomics during live play:
+But Thaumacord is not looking for "online character sheets" in the usual sense. The target is not a document hosted on the web. The target is a **table-first active sheet**: a mobile control surface used during an in-person session, while the GM receives clean, structured, real-time data.
+
+The repeated gap is ergonomics during live table play:
 
 - players still search for the right field, checkbox, condition, or resource;
 - sheets are often document-like rather than action-like;
@@ -70,6 +72,16 @@ Thaumacord should treat the sheet as a dynamic control surface:
 - convert rule text into buttons, gestures, timers, prompts, and state transitions;
 - transmit structured events to the GM dashboard;
 - avoid making players hunt for checkboxes.
+
+For table play, the design target is:
+
+- the player uses the phone as a quick-access play aid, not as a screen to read for minutes;
+- the GM sees every relevant state change in one dashboard;
+- player-facing controls are contextual and short-lived;
+- conditions, wounds, resources, cooldowns, secrets, debts, clocks, objectives, and permissions are all modeled as state;
+- the app records what changed, who changed it, why, and whether it came from a rule, a player request, a gesture, or a GM override;
+- the GM can inspect all data without asking players to recite their sheet;
+- optional hidden fields can remain hidden from other players while still being visible to the GM when the module allows it.
 
 ## Licence options
 
@@ -150,4 +162,3 @@ Thaumacord's moat is not the character sheet. It is the combination of:
 - location/zone effects;
 - importable modules;
 - late AI assistant with anti-spoiler constraints.
-
