@@ -225,6 +225,72 @@ test("applies configured action state effects from payload", async () => {
   assert.equal(updatedParticipant.statuses.depth, "periscope-depth");
 });
 
+test("resolves available gestures to module actions", async () => {
+  const session = await createSession();
+  const code = session.code;
+  const device = await createDevice(code, "Telephone machine");
+  const participant = await createParticipant(code, "Machiniste", "engineer");
+  await bindDevice(code, device.device.id, participant.participant.id);
+  await setResource(code, participant.participant.id, "battery", 2);
+  await setResource(code, participant.participant.id, "noise", 4);
+  await advancePhase(code);
+
+  const actionResponse = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/events`,
+    payload: {
+      type: "gesture.detected",
+      gesture: "phone-face-down",
+      sourceDeviceId: device.device.id,
+      participantId: participant.participant.id
+    }
+  });
+
+  assert.equal(actionResponse.statusCode, 202);
+  const body = actionResponse.json<JsonObject>();
+  const updatedParticipant = body.dashboard.participants.find((candidate: JsonObject) => candidate.id === participant.participant.id);
+  assert.equal(body.actionResult.actionId, "quiet-engines");
+  assert.equal(body.actionResult.gesture, "phone-face-down");
+  assert.equal(updatedParticipant.resources.battery, 1);
+  assert.equal(updatedParticipant.resources.noise, 2);
+});
+
+test("rejects gestures when no matching action is currently available", async () => {
+  const session = await createSession();
+  const code = session.code;
+  const device = await createDevice(code, "Telephone machine");
+  const participant = await createParticipant(code, "Machiniste", "engineer");
+  await bindDevice(code, device.device.id, participant.participant.id);
+
+  const blockedGesture = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/events`,
+    payload: {
+      type: "gesture.detected",
+      payload: { gesture: "phone-face-down" },
+      sourceDeviceId: device.device.id,
+      participantId: participant.participant.id
+    }
+  });
+
+  assert.equal(blockedGesture.statusCode, 400);
+  assert.match(blockedGesture.json<JsonObject>().error, /no available action/);
+
+  const unknownGesture = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/events`,
+    payload: {
+      type: "gesture.detected",
+      gesture: "pour-liquid",
+      sourceDeviceId: device.device.id,
+      participantId: participant.participant.id
+    }
+  });
+
+  assert.equal(unknownGesture.statusCode, 400);
+  assert.match(unknownGesture.json<JsonObject>().error, /Unknown gesture/);
+});
+
 test("rejects configured actions when role, phase, or resources do not allow them", async () => {
   const session = await createSession();
   const code = session.code;

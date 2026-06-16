@@ -60,6 +60,7 @@ Acceptance criteria:
 
 - Event has `type`, optional `sourceDeviceId`, optional `participantId`, and `payload`.
 - Event can include `actionId` to execute a module action.
+- Gesture events can resolve to a currently available module action.
 - Unknown source device is rejected.
 - Unknown participant is rejected.
 - Unknown action is rejected.

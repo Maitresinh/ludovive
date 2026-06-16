@@ -92,3 +92,5 @@ Supported effects:
 - `revealContactHint`: stores a contact hint status.
 
 Participant read models expose `availableActions` derived from module actions. Each item contains `id`, `name`, `phase`, optional `gesture`, optional `fallback`, `available`, and `blockedBy`.
+
+Gesture events can omit `actionId` when the module action has a matching `gesture`. The server only resolves the gesture if the action is currently available for the participant.

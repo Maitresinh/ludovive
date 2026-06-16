@@ -75,6 +75,8 @@ Structured events can also execute module actions by sending `actionId` to `POST
 
 Participant/device read models include `availableActions`, a table-ready list of module actions with gesture metadata and blocking reasons such as `role`, `phase`, or `resource:battery`.
 
+Gesture events can be sent as `type: "gesture.detected"` with `gesture` or `payload.gesture`. The server resolves the gesture to the first currently available module action for the participant.
+
 Run the server tests with:
 
 ```bash

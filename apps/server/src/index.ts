@@ -162,6 +162,7 @@ const setResourceSchema = z.object({
 const eventSchema = z.object({
   type: z.string().min(1),
   actionId: z.string().min(1).optional(),
+  gesture: z.string().min(1).optional(),
   sourceDeviceId: z.string().min(1).optional(),
   participantId: z.string().min(1).optional(),
   payload: z.record(z.unknown()).default({})
@@ -302,8 +303,44 @@ function applyEffect(module: GameModule, participant: Participant, effect: Known
   return { type: effect.type, precision: effect.precision };
 }
 
+function eventGesture(event: EventInput): string | undefined {
+  return event.gesture ?? (typeof event.payload.gesture === "string" ? event.payload.gesture : undefined);
+}
+
+function resolveActionId(session: Session, event: EventInput): string | undefined {
+  const explicitActionId = event.actionId ?? (typeof event.payload.actionId === "string" ? event.payload.actionId : undefined);
+  if (explicitActionId) {
+    return explicitActionId;
+  }
+
+  const gesture = eventGesture(event);
+  if (!gesture) {
+    return undefined;
+  }
+  if (!event.participantId) {
+    throw new Error("Gesture event requires participantId");
+  }
+
+  const participant = session.participants.find((candidate) => candidate.id === event.participantId);
+  if (!participant) {
+    throw new Error("Unknown participant");
+  }
+
+  const module = getModuleOrThrow(session.moduleId);
+  const matchingActions = module.actions.filter((action) => action.gesture === gesture);
+  if (matchingActions.length === 0) {
+    throw new Error(`Unknown gesture: ${gesture}`);
+  }
+
+  const availableAction = matchingActions.find((action) => actionBlockedBy(session, participant, action).length === 0);
+  if (!availableAction) {
+    throw new Error(`Gesture ${gesture} has no available action`);
+  }
+  return availableAction.id;
+}
+
 function applyActionEvent(session: Session, event: EventInput): Record<string, unknown> | undefined {
-  const actionId = event.actionId ?? (typeof event.payload.actionId === "string" ? event.payload.actionId : undefined);
+  const actionId = resolveActionId(session, event);
   if (!actionId) {
     return undefined;
   }
@@ -338,6 +375,7 @@ function applyActionEvent(session: Session, event: EventInput): Record<string, u
 
   return {
     actionId,
+    gesture: eventGesture(event),
     participantId: participant.id,
     costs: appliedCosts,
     effect: appliedEffect
@@ -885,6 +923,7 @@ app.post("/sessions/:code/events", async (request, reply) => {
 
   audit(session, event.type, {
     actionId: event.actionId,
+    gesture: event.gesture,
     sourceDeviceId: event.sourceDeviceId,
     participantId: event.participantId,
     payload: event.payload,
