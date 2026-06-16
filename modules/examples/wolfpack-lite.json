@@ -1,0 +1,180 @@
+{
+  "id": "wolfpack-lite",
+  "name": "Wolfpack Lite",
+  "version": "0.1.0",
+  "pitch": "Un equipage de sous-marin pendant la Seconde Guerre mondiale coordonne navigation, machines, sonar, armement et commandement pour traquer ou fuir un ennemi.",
+  "inspirationNotes": "Module original pour Thaumacord, inspire des jeux d'equipage coordonne en temps reel comme Captain Sonar de Roberto Fraga et Yohan Lemonnier, sans reprendre leurs regles.",
+  "players": { "min": 3, "max": 10 },
+  "teamMode": {
+    "enabled": true,
+    "minTeams": 1,
+    "maxTeams": 2,
+    "teamName": "Equipage"
+  },
+  "resources": [
+    { "id": "hull", "name": "Coque", "visibility": "team", "min": 0, "max": 6 },
+    { "id": "oxygen", "name": "Oxygene", "visibility": "team", "min": 0, "max": 12 },
+    { "id": "battery", "name": "Batteries", "visibility": "team", "min": 0, "max": 12 },
+    { "id": "noise", "name": "Bruit", "visibility": "team", "min": 0, "max": 10 },
+    { "id": "torpedoes", "name": "Torpilles", "visibility": "team", "min": 0, "max": 6 },
+    { "id": "intel", "name": "Renseignements", "visibility": "private", "min": 0 }
+  ],
+  "phases": [
+    { "id": "briefing", "name": "Briefing", "durationSeconds": 180 },
+    { "id": "silent-running", "name": "Navigation silencieuse", "durationSeconds": 600 },
+    { "id": "contact", "name": "Contact sonar", "durationSeconds": 300 },
+    { "id": "attack-run", "name": "Passe d'attaque", "durationSeconds": 240 },
+    { "id": "damage-control", "name": "Avaries", "durationSeconds": 240 }
+  ],
+  "roles": [
+    {
+      "id": "captain",
+      "name": "Capitaine",
+      "startingResources": { "intel": 1 },
+      "responsibilities": ["Donner les ordres", "Choisir les priorites", "Valider tir, plongee d'urgence et rupture de silence"],
+      "actions": ["issue-order", "authorize-fire", "emergency-dive"]
+    },
+    {
+      "id": "helmsman",
+      "name": "Pilote",
+      "startingResources": {},
+      "responsibilities": ["Maintenir le cap", "Changer de profondeur", "Executer les manoeuvres"],
+      "actions": ["change-depth", "change-heading", "evade"]
+    },
+    {
+      "id": "engineer",
+      "name": "Machiniste",
+      "startingResources": {},
+      "responsibilities": ["Gerer batteries, moteurs et reparations", "Reduire le bruit", "Repartir l'energie"],
+      "actions": ["repair-system", "reroute-power", "quiet-engines"]
+    },
+    {
+      "id": "sonar",
+      "name": "Operateur sonar",
+      "startingResources": { "intel": 1 },
+      "responsibilities": ["Ecouter les contacts", "Interpreter les bruits", "Signaler distance et direction probables"],
+      "actions": ["sonar-sweep", "classify-contact", "listen-silently"]
+    },
+    {
+      "id": "weapons",
+      "name": "Officier torpilles",
+      "startingResources": {},
+      "responsibilities": ["Armer les torpilles", "Calculer une solution de tir", "Tirer quand le capitaine autorise"],
+      "actions": ["load-torpedo", "compute-solution", "fire-torpedo"]
+    },
+    {
+      "id": "radio",
+      "name": "Radio",
+      "startingResources": { "intel": 1 },
+      "responsibilities": ["Recevoir les ordres", "Decoder les messages", "Risquer une emission radio"],
+      "actions": ["decode-message", "send-burst", "intercept"]
+    }
+  ],
+  "actions": [
+    {
+      "id": "issue-order",
+      "name": "Donner un ordre",
+      "phase": "*",
+      "actor": "captain",
+      "target": "team",
+      "effect": { "type": "message", "visibility": "team" },
+      "gesture": "hold-phone-up",
+      "fallback": "manual-confirmation"
+    },
+    {
+      "id": "change-depth",
+      "name": "Changer de profondeur",
+      "phase": "silent-running",
+      "actor": "helmsman",
+      "target": "team",
+      "cost": { "battery": 1 },
+      "effect": { "type": "setState", "state": "depth" },
+      "gesture": "tilt-phone-forward",
+      "fallback": "manual-confirmation"
+    },
+    {
+      "id": "quiet-engines",
+      "name": "Silence machine",
+      "phase": "silent-running",
+      "actor": "engineer",
+      "target": "team",
+      "cost": { "battery": 1 },
+      "effect": { "type": "adjustResource", "resource": "noise", "delta": -2 },
+      "gesture": "phone-face-down",
+      "fallback": "manual-confirmation"
+    },
+    {
+      "id": "sonar-sweep",
+      "name": "Balayage sonar",
+      "phase": "contact",
+      "actor": "sonar",
+      "target": "zone",
+      "cost": { "battery": 1 },
+      "effect": { "type": "revealContactHint", "precision": "low" },
+      "gesture": "slow-phone-arc",
+      "fallback": "manual-confirmation"
+    },
+    {
+      "id": "load-torpedo",
+      "name": "Armer une torpille",
+      "phase": "attack-run",
+      "actor": "weapons",
+      "target": "team",
+      "cost": { "torpedoes": 1 },
+      "effect": { "type": "setState", "state": "torpedoLoaded", "value": true },
+      "gesture": "slide-resource-to-edge",
+      "fallback": "manual-confirmation"
+    },
+    {
+      "id": "fire-torpedo",
+      "name": "Tir torpille",
+      "phase": "attack-run",
+      "actor": "weapons",
+      "target": "enemy",
+      "requires": ["torpedoLoaded", "captainAuthorization"],
+      "effect": { "type": "contestedAttack", "attackResource": "solution", "defenseResource": "evasion" },
+      "gesture": "strike-phone",
+      "fallback": "manual-confirmation"
+    }
+  ],
+  "zones": [
+    {
+      "id": "open-sea",
+      "name": "Mer ouverte",
+      "fictionalType": "sea-zone",
+      "presenceMethod": "fictional-map",
+      "effects": [{ "type": "unlockPhase", "phase": "silent-running" }]
+    },
+    {
+      "id": "convoy-route",
+      "name": "Route du convoi",
+      "fictionalType": "target-zone",
+      "presenceMethod": "fictional-map",
+      "effects": [
+        { "type": "unlockPhase", "phase": "contact" },
+        { "type": "increaseRisk", "risk": "escort-detection", "amount": 1 }
+      ]
+    },
+    {
+      "id": "depth-charge-field",
+      "name": "Champ de grenades sous-marines",
+      "fictionalType": "danger-zone",
+      "presenceMethod": "fictional-map",
+      "effects": [{ "type": "periodicDamageCheck", "resource": "hull" }]
+    }
+  ],
+  "victoryConditions": [
+    {
+      "id": "sink-enemy",
+      "name": "Couler l'ennemi",
+      "type": "team",
+      "text": "L'equipage gagne si le sous-marin ennemi ou la cible designee est neutralise avant que la coque tombe a 0."
+    },
+    {
+      "id": "survive-and-report",
+      "name": "Survivre et transmettre",
+      "type": "team",
+      "text": "En mode cooperatif, l'equipage gagne s'il localise l'ennemi, transmet le renseignement, puis quitte la zone."
+    }
+  ]
+}

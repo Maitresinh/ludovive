@@ -24,6 +24,12 @@ docs/           Product, architecture, Scrum backlog, module schema
 modules/        Importable game module examples
 ```
 
+Current example modules:
+
+- `putsch-lite`
+- `long-live-the-king-lite`
+- `wolfpack-lite`, a WWII submarine crew coordination module inspired by the coordinated-stations feel of games like Captain Sonar, without copying its rules.
+
 ## MVP Scope
 
 The MVP focuses on the playable spine:
@@ -56,4 +62,3 @@ The Android app is a native skeleton. Open `apps/android` in Android Studio afte
 Target account: https://github.com/Maitresinh
 
 Recommended repository name: `thaumacord`.
-
