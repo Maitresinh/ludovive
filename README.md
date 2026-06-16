@@ -66,6 +66,7 @@ Sprint 1 focuses on the generic transmission loop. The API now also exposes:
 - `POST /sessions/:code/devices/:deviceId/disconnect`
 - `POST /sessions/:code/zones/:zoneId/presence`
 - `POST /sessions/:code/events`
+- `GET /sessions/:code/audit?after=:sequence&limit=:limit`
 - `GET /sessions/:code/read-models/dashboard`
 - `GET /sessions/:code/read-models/participant/:participantId`
 - `GET /sessions/:code/read-models/device/:deviceId`
@@ -77,6 +78,8 @@ Live clients receive a read model filtered for their audience: dashboard clients
 Devices can report heartbeat/disconnect events. Thaumacord updates `connected`, `lastSeenAt`, audit, and live clients.
 
 Audit entries include a stable `id` and monotonic `sequence` per session. Live broadcasts carry those audit entries when they represent state changes, so clients can order updates.
+
+Clients that miss WebSocket messages can call the audit catch-up endpoint with their last applied sequence.
 
 Structured events can also execute module actions by sending `actionId` to `POST /sessions/:code/events`. The prototype currently validates role, phase, resource costs, and applies the first supported effects: `adjustResource`, `setState`, `message`, and `revealContactHint`.
 

@@ -178,6 +178,11 @@ const setResourceSchema = z.object({
   value: z.number().int()
 });
 
+const auditQuerySchema = z.object({
+  after: z.coerce.number().int().min(0).default(0),
+  limit: z.coerce.number().int().min(1).max(200).default(50)
+});
+
 const zonePresenceSchema = z.object({
   participantId: z.string().min(1).optional(),
   sourceDeviceId: z.string().min(1).optional()
@@ -1075,6 +1080,26 @@ app.get("/sessions/:code/read-models/device/:deviceId", async (request, reply) =
     return reply.code(404).send({ error: "Device not found" });
   }
   return readModelForAudience(session, { kind: "device", deviceId });
+});
+
+app.get("/sessions/:code/audit", async (request, reply) => {
+  const { code } = request.params as { code: string };
+  const session = getSession(code);
+  if (!session) {
+    return reply.code(404).send({ error: "Session not found" });
+  }
+
+  const query = auditQuerySchema.parse(request.query);
+  const entries = session.audit.filter((entry) => entry.sequence > query.after).slice(0, query.limit);
+  const latestSequence = session.nextAuditSequence - 1;
+  return {
+    code: session.code,
+    after: query.after,
+    limit: query.limit,
+    latestSequence,
+    hasMore: entries.at(-1)?.sequence !== undefined && entries.at(-1)!.sequence < latestSequence,
+    entries
+  };
 });
 
 app.post("/sessions/:code/zones/:zoneId/presence", async (request, reply) => {

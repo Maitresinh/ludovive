@@ -132,6 +132,31 @@ test("assigns monotonic audit sequence numbers within a session", async () => {
   assert.equal(dashboard.audit[0].id, `${code}-1`);
 });
 
+test("returns audit catch-up entries after a client sequence", async () => {
+  const session = await createSession();
+  const code = session.code;
+  const device = await createDevice(code, "Telephone sonar");
+  const participant = await createParticipant(code, "Station sonar");
+  await bindDevice(code, device.device.id, participant.participant.id);
+
+  const firstPage = await injectJson("GET", `/sessions/${code}/audit?after=1&limit=2`);
+  assert.equal(firstPage.after, 1);
+  assert.equal(firstPage.limit, 2);
+  assert.equal(firstPage.latestSequence, 4);
+  assert.equal(firstPage.hasMore, true);
+  assert.deepEqual(
+    firstPage.entries.map((entry: JsonObject) => entry.sequence),
+    [2, 3]
+  );
+
+  const secondPage = await injectJson("GET", `/sessions/${code}/audit?after=3`);
+  assert.equal(secondPage.hasMore, false);
+  assert.deepEqual(
+    secondPage.entries.map((entry: JsonObject) => entry.sequence),
+    [4]
+  );
+});
+
 test("returns structured validation errors for malformed mobile payloads", async () => {
   const session = await createSession();
   const code = session.code;
@@ -163,6 +188,14 @@ test("returns structured validation errors for malformed mobile payloads", async
   assert.equal(invalidResourceValue.statusCode, 400);
   assert.equal(invalidResourceValue.json<JsonObject>().error, "Validation failed");
   assert.equal(invalidResourceValue.json<JsonObject>().issues[0].path, "value");
+
+  const invalidAuditQuery = await app.inject({
+    method: "GET",
+    url: `/sessions/${code}/audit?after=-1`
+  });
+  assert.equal(invalidAuditQuery.statusCode, 400);
+  assert.equal(invalidAuditQuery.json<JsonObject>().error, "Validation failed");
+  assert.equal(invalidAuditQuery.json<JsonObject>().issues[0].path, "after");
 });
 
 test("tracks device heartbeat and disconnection state", async () => {
