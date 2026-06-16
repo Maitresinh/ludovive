@@ -116,3 +116,20 @@ Acceptance criteria:
 - It prioritizes current actions, statuses, resources, and alerts.
 - Any change emits a structured event to the transmission core.
 - The dashboard receives the corresponding update.
+
+### Epic 10: Reuse And Architecture Spikes
+
+As a product team, we can evaluate existing open source foundations so that Thaumacord does not reinvent mature infrastructure unnecessarily.
+
+Acceptance criteria:
+
+- Colyseus is evaluated for live rooms and reconnect.
+- Nearby Connections is evaluated for Android phone-to-phone interactions.
+- boardgame.io is evaluated for actions/phases/rules patterns.
+- A written adoption decision is recorded.
+
+Stories:
+
+- Spike Colyseus live rooms with filtered dashboard and device payloads.
+- Spike Android Nearby Connections with two-device discovery and a normalized gesture event.
+- Compare boardgame.io phases/moves with Thaumacord modules/actions before votes and petitions.
