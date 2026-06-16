@@ -42,6 +42,13 @@ async function advancePhase(code: string): Promise<JsonObject> {
   return injectJson("POST", `/sessions/${code}/phases/advance`, {});
 }
 
+async function enterZone(code: string, zoneId: string, participantId: string, sourceDeviceId?: string): Promise<JsonObject> {
+  return injectJson("POST", `/sessions/${code}/zones/${zoneId}/presence`, {
+    participantId,
+    sourceDeviceId
+  });
+}
+
 function collectLiveMessages(url: string, expectedCount = 2): Promise<{ socket: WebSocket; messages: JsonObject[] }> {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(url);
@@ -144,6 +151,54 @@ test("exposes participant actions with availability reasons", async () => {
   assert.equal(quietRunning.gesture, "phone-face-down");
   assert.equal(sonarSweep.available, false);
   assert.equal(sonarSweep.blockedBy.includes("role"), true);
+});
+
+test("maps participant presence to imaginary zones and applies zone effects", async () => {
+  const session = await createSession();
+  const code = session.code;
+  const device = await createDevice(code, "Telephone sonar");
+  const participant = await createParticipant(code, "Station sonar");
+  await bindDevice(code, device.device.id, participant.participant.id);
+
+  const zoneResponse = await enterZone(code, "convoy-route", participant.participant.id, device.device.id);
+
+  const movedParticipant = zoneResponse.dashboard.participants.find((candidate: JsonObject) => candidate.id === participant.participant.id);
+  assert.equal(zoneResponse.accepted, true);
+  assert.equal(movedParticipant.locationId, "convoy-route");
+  assert.equal(zoneResponse.dashboard.unlockedPhases.includes("contact"), true);
+  assert.equal(zoneResponse.dashboard.risks["escort-detection"], 1);
+  assert.equal(zoneResponse.zoneResult.effects.length, 2);
+});
+
+test("rejects invalid zone presence updates", async () => {
+  const session = await createSession();
+  const code = session.code;
+  const device = await createDevice(code, "Telephone sonar");
+  const participant = await createParticipant(code, "Station sonar");
+
+  const unknownZone = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/zones/missing-zone/presence`,
+    payload: { participantId: participant.participant.id, sourceDeviceId: device.device.id }
+  });
+  assert.equal(unknownZone.statusCode, 400);
+  assert.match(unknownZone.json<JsonObject>().error, /Unknown zone/);
+
+  const unknownParticipant = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/zones/convoy-route/presence`,
+    payload: { participantId: "missing-participant", sourceDeviceId: device.device.id }
+  });
+  assert.equal(unknownParticipant.statusCode, 400);
+  assert.equal(unknownParticipant.json<JsonObject>().error, "Unknown participant");
+
+  const unknownDevice = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/zones/convoy-route/presence`,
+    payload: { participantId: participant.participant.id, sourceDeviceId: "missing-device" }
+  });
+  assert.equal(unknownDevice.statusCode, 400);
+  assert.equal(unknownDevice.json<JsonObject>().error, "Unknown source device");
 });
 
 test("rejects structured events from unknown devices or participants", async () => {

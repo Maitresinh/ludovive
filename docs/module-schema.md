@@ -94,3 +94,13 @@ Supported effects:
 Participant read models expose `availableActions` derived from module actions. Each item contains `id`, `name`, `phase`, optional `gesture`, optional `fallback`, `available`, and `blockedBy`.
 
 Gesture events can omit `actionId` when the module action has a matching `gesture`. The server only resolves the gesture if the action is currently available for the participant.
+
+## Supported Zone Effects In Prototype
+
+`POST /sessions/:code/zones/:zoneId/presence` moves a participant to a module zone and applies supported zone effects.
+
+Supported zone effects:
+
+- `unlockPhase`: adds the phase id to session `unlockedPhases`;
+- `increaseRisk`: increments a session risk counter;
+- `periodicDamageCheck`: records a pending hazard result for audit/read-model visibility.

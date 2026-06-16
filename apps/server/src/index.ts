@@ -106,6 +106,8 @@ type Session = {
   phaseIndex: number;
   devices: Device[];
   participants: Participant[];
+  unlockedPhases: string[];
+  risks: Record<string, number>;
   audit: AuditEntry[];
 };
 
@@ -159,6 +161,11 @@ const setResourceSchema = z.object({
   value: z.number().int()
 });
 
+const zonePresenceSchema = z.object({
+  participantId: z.string().min(1),
+  sourceDeviceId: z.string().min(1).optional()
+});
+
 const eventSchema = z.object({
   type: z.string().min(1),
   actionId: z.string().min(1).optional(),
@@ -190,6 +197,22 @@ const revealContactHintEffectSchema = z.object({
   precision: z.string().min(1)
 });
 
+const unlockPhaseZoneEffectSchema = z.object({
+  type: z.literal("unlockPhase"),
+  phase: z.string().min(1)
+});
+
+const increaseRiskZoneEffectSchema = z.object({
+  type: z.literal("increaseRisk"),
+  risk: z.string().min(1),
+  amount: z.number().int()
+});
+
+const periodicDamageCheckZoneEffectSchema = z.object({
+  type: z.literal("periodicDamageCheck"),
+  resource: z.string().min(1)
+});
+
 const knownEffectSchema = z.discriminatedUnion("type", [
   resourceDeltaEffectSchema,
   setStateEffectSchema,
@@ -197,7 +220,14 @@ const knownEffectSchema = z.discriminatedUnion("type", [
   revealContactHintEffectSchema
 ]);
 
+const knownZoneEffectSchema = z.discriminatedUnion("type", [
+  unlockPhaseZoneEffectSchema,
+  increaseRiskZoneEffectSchema,
+  periodicDamageCheckZoneEffectSchema
+]);
+
 type KnownEffect = z.infer<typeof knownEffectSchema>;
+type KnownZoneEffect = z.infer<typeof knownZoneEffectSchema>;
 type EventInput = z.infer<typeof eventSchema>;
 
 function modulesDir(): string {
@@ -301,6 +331,51 @@ function applyEffect(module: GameModule, participant: Participant, effect: Known
     hint: typeof event.payload.hint === "string" ? event.payload.hint : undefined
   };
   return { type: effect.type, precision: effect.precision };
+}
+
+function applyZoneEffect(session: Session, effect: KnownZoneEffect): Record<string, unknown> {
+  if (effect.type === "unlockPhase") {
+    if (!session.unlockedPhases.includes(effect.phase)) {
+      session.unlockedPhases.push(effect.phase);
+    }
+    return { type: effect.type, phase: effect.phase };
+  }
+
+  if (effect.type === "increaseRisk") {
+    const before = session.risks[effect.risk] ?? 0;
+    const after = before + effect.amount;
+    session.risks[effect.risk] = after;
+    return { type: effect.type, risk: effect.risk, before, after };
+  }
+
+  return { type: effect.type, resource: effect.resource, pending: true };
+}
+
+function enterZone(session: Session, participantId: string, zoneId: string): Record<string, unknown> {
+  const module = getModuleOrThrow(session.moduleId);
+  const participant = session.participants.find((candidate) => candidate.id === participantId);
+  if (!participant) {
+    throw new Error("Unknown participant");
+  }
+
+  const zone = module.zones.find((candidate) => candidate.id === zoneId);
+  if (!zone) {
+    throw new Error(`Unknown zone: ${zoneId}`);
+  }
+
+  const previousLocationId = participant.locationId;
+  participant.locationId = zone.id;
+  const effects = zone.effects.map((effect) => {
+    const parsedEffect = knownZoneEffectSchema.safeParse(effect);
+    return parsedEffect.success ? applyZoneEffect(session, parsedEffect.data) : { type: "unsupported", effect };
+  });
+
+  return {
+    participantId,
+    zoneId: zone.id,
+    previousLocationId,
+    effects
+  };
 }
 
 function eventGesture(event: EventInput): string | undefined {
@@ -756,6 +831,8 @@ app.post("/sessions", async (request, reply) => {
     phaseIndex: 0,
     devices: [],
     participants: [],
+    unlockedPhases: [module.phases[0].id],
+    risks: {},
     audit: []
   };
 
@@ -897,6 +974,34 @@ app.get("/sessions/:code/read-models/device/:deviceId", async (request, reply) =
     return reply.code(404).send({ error: "Device not found" });
   }
   return readModelForAudience(session, { kind: "device", deviceId });
+});
+
+app.post("/sessions/:code/zones/:zoneId/presence", async (request, reply) => {
+  const { code, zoneId } = request.params as { code: string; zoneId: string };
+  const session = getSession(code);
+  if (!session) {
+    return reply.code(404).send({ error: "Session not found" });
+  }
+
+  const input = zonePresenceSchema.parse(request.body);
+  if (input.sourceDeviceId && !session.devices.some((device) => device.id === input.sourceDeviceId)) {
+    return reply.code(400).send({ error: "Unknown source device" });
+  }
+
+  let zoneResult: Record<string, unknown>;
+  try {
+    zoneResult = enterZone(session, input.participantId, zoneId);
+  } catch (error) {
+    return reply.code(400).send({ error: error instanceof Error ? error.message : "Zone presence rejected" });
+  }
+
+  audit(session, "zone.entered", { sourceDeviceId: input.sourceDeviceId, ...zoneResult });
+  broadcast(session, "zone.entered", session.audit.at(-1));
+  return reply.code(202).send({
+    accepted: true,
+    zoneResult,
+    dashboard: dashboardReadModel(session)
+  });
 });
 
 app.post("/sessions/:code/events", async (request, reply) => {

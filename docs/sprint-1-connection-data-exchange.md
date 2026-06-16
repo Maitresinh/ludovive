@@ -119,3 +119,16 @@ Acceptance criteria:
 - Unbound device receives minimal public pairing state.
 - Bound device receives its participant-specific read model.
 - Dashboard-only data is not exposed to device read models.
+
+### Enter Imaginary Zone
+
+As a mapped real-world interaction, a participant can enter an imaginary module zone.
+
+Acceptance criteria:
+
+- Unknown zone is rejected.
+- Unknown participant is rejected.
+- Unknown source device is rejected.
+- Participant location is updated.
+- Supported zone effects update session state.
+- `zone.entered` is added to audit and broadcast.
