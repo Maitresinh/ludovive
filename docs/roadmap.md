@@ -17,6 +17,16 @@
 - Broadcast filtered session state.
 - Audit transmission events.
 
+First test target:
+
+- session created from `wolfpack-lite`;
+- device registered;
+- station participant created;
+- device bound to participant;
+- `sonar.ping` event accepted;
+- dashboard read model receives devices, participants, and audit;
+- participant read model receives its filtered state.
+
 ## Sprint 2: Module Loading and State Model
 
 - Load example module.

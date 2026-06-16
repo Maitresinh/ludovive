@@ -57,6 +57,15 @@ npm run dev
 
 Then open `http://localhost:3333/` to use the browser-based GM/player prototype. The API also exposes `GET /modules`, `POST /sessions`, `POST /sessions/:code/join`, and `POST /sessions/:code/phases/advance`.
 
+Sprint 1 focuses on the generic transmission loop. The API now also exposes:
+
+- `POST /sessions/:code/devices`
+- `POST /sessions/:code/participants`
+- `POST /sessions/:code/devices/:deviceId/bind`
+- `POST /sessions/:code/events`
+- `GET /sessions/:code/read-models/dashboard`
+- `GET /sessions/:code/read-models/participant/:participantId`
+
 The Android app is a native skeleton. Open `apps/android` in Android Studio after installing Android Studio/Gradle tooling.
 
 ## GitHub

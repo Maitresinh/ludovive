@@ -1,0 +1,88 @@
+# Sprint 1: Connection and Data Exchange
+
+## Sprint Goal
+
+Prove the core Thaumacord loop before building game-specific interfaces.
+
+The sprint is successful when several devices can connect to a session, bind to participants, send structured events, receive synchronized state, and leave a readable audit trail.
+
+## Not The Goal Yet
+
+This sprint does not aim to build a polished GM view or player sheet.
+
+Those are later read models. The first problem is transmission:
+
+```text
+device connects -> device binds to participant -> device sends event -> server validates -> state/audit changes -> filtered read model updates
+```
+
+## User Stories
+
+### Register Device
+
+As a table device, I can register in a session so that Thaumacord can identify the source of future data.
+
+Acceptance criteria:
+
+- A session code is required.
+- A device id is generated.
+- Device display name is stored.
+- Device connection metadata is stored.
+- `device.registered` is added to audit.
+
+### Create Participant
+
+As a facilitator or module, I can create a participant so that game state has an owner.
+
+Acceptance criteria:
+
+- Participant can be a person, team, station, object, location, or clock.
+- Participant owns resources and statuses.
+- Participant can be unbound from any device.
+- `participant.created` is added to audit.
+
+### Bind Device To Participant
+
+As a facilitator or joining flow, I can bind a device to a participant.
+
+Acceptance criteria:
+
+- Unknown device is rejected.
+- Unknown participant is rejected.
+- Successful binding updates the device.
+- `participant.bound_to_device` is added to audit.
+
+### Send Structured Event
+
+As a connected device, I can send a structured event.
+
+Acceptance criteria:
+
+- Event has `type`, optional `sourceDeviceId`, optional `participantId`, and `payload`.
+- Unknown source device is rejected.
+- Unknown participant is rejected.
+- Accepted event is added to audit.
+- Server returns the dashboard read model after acceptance.
+
+### Read Dashboard State
+
+As a dashboard, I can request a complete read model.
+
+Acceptance criteria:
+
+- Response includes devices.
+- Response includes participants.
+- Response includes module and phase.
+- Response includes audit.
+
+### Read Participant State
+
+As a participant-bound surface, I can request my filtered read model.
+
+Acceptance criteria:
+
+- Response includes my participant state.
+- Response includes public identity of other participants.
+- Response includes recent audit.
+- It does not require a GM/player distinction.
+

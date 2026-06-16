@@ -71,11 +71,22 @@ const moduleSchema = z.object({
 });
 
 type GameModule = z.infer<typeof moduleSchema>;
-type Player = {
+type Device = {
   id: string;
+  name: string;
+  participantId?: string;
+  connected: boolean;
+  lastSeenAt: string;
+};
+
+type Participant = {
+  id: string;
+  kind: "person" | "team" | "station" | "object" | "location" | "clock";
   name: string;
   roleId?: string;
   resources: Record<string, number>;
+  statuses: Record<string, unknown>;
+  locationId?: string;
 };
 
 type AuditEntry = {
@@ -88,7 +99,8 @@ type Session = {
   code: string;
   moduleId: string;
   phaseIndex: number;
-  players: Player[];
+  devices: Device[];
+  participants: Participant[];
   audit: AuditEntry[];
 };
 
@@ -103,6 +115,20 @@ const joinSessionSchema = z.object({
   name: z.string().min(1).max(80)
 });
 
+const registerDeviceSchema = z.object({
+  name: z.string().min(1).max(80)
+});
+
+const bindDeviceSchema = z.object({
+  participantId: z.string().min(1)
+});
+
+const createParticipantSchema = z.object({
+  name: z.string().min(1).max(80),
+  kind: z.enum(["person", "team", "station", "object", "location", "clock"]).default("person"),
+  roleId: z.string().min(1).optional()
+});
+
 const assignRoleSchema = z.object({
   roleId: z.string().min(1)
 });
@@ -110,6 +136,13 @@ const assignRoleSchema = z.object({
 const setResourceSchema = z.object({
   resourceId: z.string().min(1),
   value: z.number().int()
+});
+
+const eventSchema = z.object({
+  type: z.string().min(1),
+  sourceDeviceId: z.string().min(1).optional(),
+  participantId: z.string().min(1).optional(),
+  payload: z.record(z.unknown()).default({})
 });
 
 function modulesDir(): string {
@@ -163,6 +196,49 @@ function visibleSession(session: Session): Session & { module: GameModule; phase
   };
 }
 
+function dashboardReadModel(session: Session): ReturnType<typeof visibleSession> & { readModel: "dashboard" } {
+  return {
+    ...visibleSession(session),
+    readModel: "dashboard"
+  };
+}
+
+function participantReadModel(session: Session, participantId: string): unknown {
+  const participant = session.participants.find((candidate) => candidate.id === participantId);
+  if (!participant) {
+    return undefined;
+  }
+
+  const module = getModuleOrThrow(session.moduleId);
+  return {
+    code: session.code,
+    module: {
+      id: module.id,
+      name: module.name
+    },
+    phase: currentPhase(session),
+    participant,
+    visibleParticipants: session.participants.map((candidate) => ({
+      id: candidate.id,
+      kind: candidate.kind,
+      name: candidate.name,
+      roleId: candidate.roleId
+    })),
+    recentAudit: session.audit.slice(-20)
+  };
+}
+
+function createParticipant(module: GameModule, input: z.infer<typeof createParticipantSchema>): Participant {
+  return {
+    id: crypto.randomUUID(),
+    kind: input.kind,
+    name: input.name,
+    roleId: input.roleId,
+    resources: defaultResources(module, input.roleId),
+    statuses: {}
+  };
+}
+
 function renderIndex(): string {
   return `<!doctype html>
 <html lang="fr">
@@ -190,7 +266,7 @@ function renderIndex(): string {
 <body>
   <main>
     <h1>Thaumacord</h1>
-    <p class="muted">Prototype MJ/joueur sans Android : modules, sessions, roles, ressources, phases.</p>
+    <p class="muted">Prototype de transmission : modules, sessions, appareils, participants, evenements, etat synchronise.</p>
     <div class="grid">
       <section>
         <h2>1. Creer une partie</h2>
@@ -199,12 +275,12 @@ function renderIndex(): string {
         <button id="create">Creer la session</button>
       </section>
       <section>
-        <h2>2. Rejoindre</h2>
+        <h2>2. Connecter un appareil</h2>
         <label for="code">Code session</label>
         <input id="code" placeholder="ABC123" />
-        <label for="playerName">Nom joueur</label>
-        <input id="playerName" placeholder="Phil" />
-        <button id="join">Ajouter joueur</button>
+        <label for="deviceName">Nom appareil</label>
+        <input id="deviceName" placeholder="Telephone Phil" />
+        <button id="join">Enregistrer appareil + participant</button>
       </section>
       <section>
         <h2>3. Piloter</h2>
@@ -239,7 +315,8 @@ function renderIndex(): string {
         '<span class="pill">Code ' + session.code + '</span>',
         '<span class="pill">' + session.module.name + '</span>',
         '<span class="pill">Phase ' + session.phase.name + '</span>',
-        '<span class="pill">' + session.players.length + ' joueur(s)</span>'
+        '<span class="pill">' + session.devices.length + ' appareil(s)</span>',
+        '<span class="pill">' + session.participants.length + ' participant(s)</span>'
       ].join(" ");
       document.querySelector("#state").textContent = JSON.stringify(session, null, 2);
     }
@@ -252,9 +329,9 @@ function renderIndex(): string {
     });
     document.querySelector("#join").addEventListener("click", async () => {
       const code = document.querySelector("#code").value;
-      const name = document.querySelector("#playerName").value;
+      const name = document.querySelector("#deviceName").value;
       await api("/sessions/" + code + "/join", { method: "POST", body: JSON.stringify({ name }) });
-      document.querySelector("#playerName").value = "";
+      document.querySelector("#deviceName").value = "";
       await refresh();
     });
     document.querySelector("#advance").addEventListener("click", async () => {
@@ -308,7 +385,8 @@ app.post("/sessions", async (request, reply) => {
     code,
     moduleId: module.id,
     phaseIndex: 0,
-    players: [],
+    devices: [],
+    participants: [],
     audit: []
   };
 
@@ -334,20 +412,135 @@ app.post("/sessions/:code/join", async (request, reply) => {
   }
 
   const module = getModuleOrThrow(session.moduleId);
-  if (session.players.length >= module.players.max) {
+  if (session.participants.filter((participant) => participant.kind === "person").length >= module.players.max) {
     return reply.code(409).send({ error: "Session is full" });
   }
 
   const input = joinSessionSchema.parse(request.body);
-  const player: Player = {
+  const participant = createParticipant(module, { name: input.name, kind: "person" });
+  const device: Device = {
     id: crypto.randomUUID(),
     name: input.name,
-    resources: defaultResources(module)
+    participantId: participant.id,
+    connected: true,
+    lastSeenAt: new Date().toISOString()
   };
 
-  session.players.push(player);
-  audit(session, "player.joined", { playerId: player.id, name: player.name });
-  return reply.code(201).send({ player, sessionCode: session.code });
+  session.participants.push(participant);
+  session.devices.push(device);
+  audit(session, "device.registered", { deviceId: device.id, name: device.name });
+  audit(session, "participant.joined", { participantId: participant.id, name: participant.name });
+  audit(session, "participant.bound_to_device", { participantId: participant.id, deviceId: device.id });
+  return reply.code(201).send({ device, participant, sessionCode: session.code });
+});
+
+app.post("/sessions/:code/devices", async (request, reply) => {
+  const { code } = request.params as { code: string };
+  const session = getSession(code);
+  if (!session) {
+    return reply.code(404).send({ error: "Session not found" });
+  }
+
+  const input = registerDeviceSchema.parse(request.body);
+  const device: Device = {
+    id: crypto.randomUUID(),
+    name: input.name,
+    connected: true,
+    lastSeenAt: new Date().toISOString()
+  };
+
+  session.devices.push(device);
+  audit(session, "device.registered", { deviceId: device.id, name: device.name });
+  return reply.code(201).send({ device, sessionCode: session.code });
+});
+
+app.post("/sessions/:code/devices/:deviceId/bind", async (request, reply) => {
+  const { code, deviceId } = request.params as { code: string; deviceId: string };
+  const session = getSession(code);
+  if (!session) {
+    return reply.code(404).send({ error: "Session not found" });
+  }
+
+  const input = bindDeviceSchema.parse(request.body);
+  const device = session.devices.find((candidate) => candidate.id === deviceId);
+  const participant = session.participants.find((candidate) => candidate.id === input.participantId);
+  if (!device) {
+    return reply.code(404).send({ error: "Device not found" });
+  }
+  if (!participant) {
+    return reply.code(404).send({ error: "Participant not found" });
+  }
+
+  device.participantId = participant.id;
+  device.lastSeenAt = new Date().toISOString();
+  audit(session, "participant.bound_to_device", { participantId: participant.id, deviceId: device.id });
+  return dashboardReadModel(session);
+});
+
+app.post("/sessions/:code/participants", async (request, reply) => {
+  const { code } = request.params as { code: string };
+  const session = getSession(code);
+  if (!session) {
+    return reply.code(404).send({ error: "Session not found" });
+  }
+
+  const module = getModuleOrThrow(session.moduleId);
+  const input = createParticipantSchema.parse(request.body);
+  const participant = createParticipant(module, input);
+  session.participants.push(participant);
+  audit(session, "participant.created", { participantId: participant.id, kind: participant.kind, name: participant.name });
+  return reply.code(201).send({ participant, sessionCode: session.code });
+});
+
+app.get("/sessions/:code/read-models/dashboard", async (request, reply) => {
+  const { code } = request.params as { code: string };
+  const session = getSession(code);
+  if (!session) {
+    return reply.code(404).send({ error: "Session not found" });
+  }
+  return dashboardReadModel(session);
+});
+
+app.get("/sessions/:code/read-models/participant/:participantId", async (request, reply) => {
+  const { code, participantId } = request.params as { code: string; participantId: string };
+  const session = getSession(code);
+  if (!session) {
+    return reply.code(404).send({ error: "Session not found" });
+  }
+
+  const readModel = participantReadModel(session, participantId);
+  if (!readModel) {
+    return reply.code(404).send({ error: "Participant not found" });
+  }
+  return readModel;
+});
+
+app.post("/sessions/:code/events", async (request, reply) => {
+  const { code } = request.params as { code: string };
+  const session = getSession(code);
+  if (!session) {
+    return reply.code(404).send({ error: "Session not found" });
+  }
+
+  const event = eventSchema.parse(request.body);
+  if (event.sourceDeviceId && !session.devices.some((device) => device.id === event.sourceDeviceId)) {
+    return reply.code(400).send({ error: "Unknown source device" });
+  }
+  if (event.participantId && !session.participants.some((participant) => participant.id === event.participantId)) {
+    return reply.code(400).send({ error: "Unknown participant" });
+  }
+
+  audit(session, event.type, {
+    sourceDeviceId: event.sourceDeviceId,
+    participantId: event.participantId,
+    payload: event.payload
+  });
+
+  return reply.code(202).send({
+    accepted: true,
+    audit: session.audit.at(-1),
+    dashboard: dashboardReadModel(session)
+  });
 });
 
 app.post("/sessions/:code/phases/advance", async (request, reply) => {
@@ -371,9 +564,9 @@ app.post("/sessions/:code/players/:playerId/role", async (request, reply) => {
   }
 
   const module = getModuleOrThrow(session.moduleId);
-  const player = session.players.find((candidate) => candidate.id === playerId);
-  if (!player) {
-    return reply.code(404).send({ error: "Player not found" });
+  const participant = session.participants.find((candidate) => candidate.id === playerId);
+  if (!participant) {
+    return reply.code(404).send({ error: "Participant not found" });
   }
 
   const input = assignRoleSchema.parse(request.body);
@@ -382,9 +575,9 @@ app.post("/sessions/:code/players/:playerId/role", async (request, reply) => {
     return reply.code(400).send({ error: "Unknown role" });
   }
 
-  player.roleId = role.id;
-  player.resources = defaultResources(module, role.id);
-  audit(session, "role.assigned", { playerId: player.id, roleId: role.id });
+  participant.roleId = role.id;
+  participant.resources = defaultResources(module, role.id);
+  audit(session, "role.assigned", { participantId: participant.id, roleId: role.id });
   return visibleSession(session);
 });
 
@@ -396,9 +589,9 @@ app.post("/sessions/:code/players/:playerId/resources", async (request, reply) =
   }
 
   const module = getModuleOrThrow(session.moduleId);
-  const player = session.players.find((candidate) => candidate.id === playerId);
-  if (!player) {
-    return reply.code(404).send({ error: "Player not found" });
+  const participant = session.participants.find((candidate) => candidate.id === playerId);
+  if (!participant) {
+    return reply.code(404).send({ error: "Participant not found" });
   }
 
   const input = setResourceSchema.parse(request.body);
@@ -413,8 +606,8 @@ app.post("/sessions/:code/players/:playerId/resources", async (request, reply) =
     return reply.code(400).send({ error: `Resource value must be between ${min} and ${max}` });
   }
 
-  player.resources[input.resourceId] = input.value;
-  audit(session, "resource.changed", { playerId: player.id, resourceId: input.resourceId, value: input.value });
+  participant.resources[input.resourceId] = input.value;
+  audit(session, "resource.changed", { participantId: participant.id, resourceId: input.resourceId, value: input.value });
   return visibleSession(session);
 });
 
