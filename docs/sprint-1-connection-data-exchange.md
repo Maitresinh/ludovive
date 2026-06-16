@@ -61,6 +61,7 @@ Acceptance criteria:
 - Event has `type`, optional `sourceDeviceId`, optional `participantId`, and `payload`.
 - Event can include `actionId` to execute a module action.
 - Gesture events can resolve to a currently available module action.
+- If `participantId` is omitted, a bound `sourceDeviceId` can identify the participant.
 - Unknown source device is rejected.
 - Unknown participant is rejected.
 - Unknown action is rejected.
@@ -130,5 +131,6 @@ Acceptance criteria:
 - Unknown participant is rejected.
 - Unknown source device is rejected.
 - Participant location is updated.
+- Bound source device can identify the participant when `participantId` is omitted.
 - Supported zone effects update session state.
 - `zone.entered` is added to audit and broadcast.

@@ -95,6 +95,8 @@ Participant read models expose `availableActions` derived from module actions. E
 
 Gesture events can omit `actionId` when the module action has a matching `gesture`. The server only resolves the gesture if the action is currently available for the participant.
 
+For mobile clients, `sourceDeviceId` can stand in for `participantId` after the device has been bound to a participant.
+
 ## Supported Zone Effects In Prototype
 
 `POST /sessions/:code/zones/:zoneId/presence` moves a participant to a module zone and applies supported zone effects.

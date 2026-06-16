@@ -162,7 +162,7 @@ const setResourceSchema = z.object({
 });
 
 const zonePresenceSchema = z.object({
-  participantId: z.string().min(1),
+  participantId: z.string().min(1).optional(),
   sourceDeviceId: z.string().min(1).optional()
 });
 
@@ -265,6 +265,28 @@ function currentPhase(session: Session): z.infer<typeof phaseSchema> {
 
 function audit(session: Session, type: string, payload: unknown): void {
   session.audit.push({ at: new Date().toISOString(), type, payload });
+}
+
+function getDevice(session: Session, deviceId?: string): Device | undefined {
+  return deviceId ? session.devices.find((device) => device.id === deviceId) : undefined;
+}
+
+function inferParticipantId(session: Session, participantId?: string, sourceDeviceId?: string): string | undefined {
+  if (participantId) {
+    return participantId;
+  }
+  return getDevice(session, sourceDeviceId)?.participantId;
+}
+
+function participantExists(session: Session, participantId?: string): boolean {
+  return Boolean(participantId && session.participants.some((participant) => participant.id === participantId));
+}
+
+function withInferredParticipant(session: Session, event: EventInput): EventInput {
+  return {
+    ...event,
+    participantId: inferParticipantId(session, event.participantId, event.sourceDeviceId)
+  };
 }
 
 function resourceBounds(module: GameModule, resourceId: string): { min: number; max: number } | undefined {
@@ -984,13 +1006,17 @@ app.post("/sessions/:code/zones/:zoneId/presence", async (request, reply) => {
   }
 
   const input = zonePresenceSchema.parse(request.body);
-  if (input.sourceDeviceId && !session.devices.some((device) => device.id === input.sourceDeviceId)) {
+  if (input.sourceDeviceId && !getDevice(session, input.sourceDeviceId)) {
     return reply.code(400).send({ error: "Unknown source device" });
+  }
+  const participantId = inferParticipantId(session, input.participantId, input.sourceDeviceId);
+  if (!participantId) {
+    return reply.code(400).send({ error: "Participant required" });
   }
 
   let zoneResult: Record<string, unknown>;
   try {
-    zoneResult = enterZone(session, input.participantId, zoneId);
+    zoneResult = enterZone(session, participantId, zoneId);
   } catch (error) {
     return reply.code(400).send({ error: error instanceof Error ? error.message : "Zone presence rejected" });
   }
@@ -1011,13 +1037,14 @@ app.post("/sessions/:code/events", async (request, reply) => {
     return reply.code(404).send({ error: "Session not found" });
   }
 
-  const event = eventSchema.parse(request.body);
-  if (event.sourceDeviceId && !session.devices.some((device) => device.id === event.sourceDeviceId)) {
+  const parsedEvent = eventSchema.parse(request.body);
+  if (parsedEvent.sourceDeviceId && !getDevice(session, parsedEvent.sourceDeviceId)) {
     return reply.code(400).send({ error: "Unknown source device" });
   }
-  if (event.participantId && !session.participants.some((participant) => participant.id === event.participantId)) {
+  if (parsedEvent.participantId && !participantExists(session, parsedEvent.participantId)) {
     return reply.code(400).send({ error: "Unknown participant" });
   }
+  const event = withInferredParticipant(session, parsedEvent);
 
   let actionResult: Record<string, unknown> | undefined;
   try {

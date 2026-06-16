@@ -78,6 +78,8 @@ Participant/device read models include `availableActions`, a table-ready list of
 
 Gesture events can be sent as `type: "gesture.detected"` with `gesture` or `payload.gesture`. The server resolves the gesture to the first currently available module action for the participant.
 
+For mobile-first flows, events and zone presence updates can omit `participantId` when `sourceDeviceId` is bound to a participant. The server infers the participant from the device binding.
+
 Zone presence updates move a participant onto an imaginary module zone and apply supported zone effects: `unlockPhase`, `increaseRisk`, and `periodicDamageCheck` as an auditable pending hazard.
 
 Run the server tests with:

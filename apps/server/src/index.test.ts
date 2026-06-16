@@ -170,6 +170,25 @@ test("maps participant presence to imaginary zones and applies zone effects", as
   assert.equal(zoneResponse.zoneResult.effects.length, 2);
 });
 
+test("infers participant from a bound device for zone presence", async () => {
+  const session = await createSession();
+  const code = session.code;
+  const device = await createDevice(code, "Telephone sonar");
+  const participant = await createParticipant(code, "Station sonar");
+  await bindDevice(code, device.device.id, participant.participant.id);
+
+  const zoneResponse = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/zones/open-sea/presence`,
+    payload: { sourceDeviceId: device.device.id }
+  });
+
+  assert.equal(zoneResponse.statusCode, 202);
+  const body = zoneResponse.json<JsonObject>();
+  assert.equal(body.zoneResult.participantId, participant.participant.id);
+  assert.equal(body.dashboard.participants.find((candidate: JsonObject) => candidate.id === participant.participant.id).locationId, "open-sea");
+});
+
 test("rejects invalid zone presence updates", async () => {
   const session = await createSession();
   const code = session.code;
@@ -199,6 +218,15 @@ test("rejects invalid zone presence updates", async () => {
   });
   assert.equal(unknownDevice.statusCode, 400);
   assert.equal(unknownDevice.json<JsonObject>().error, "Unknown source device");
+
+  const unboundDevice = await createDevice(code, "Telephone reserve");
+  const missingParticipant = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/zones/convoy-route/presence`,
+    payload: { sourceDeviceId: unboundDevice.device.id }
+  });
+  assert.equal(missingParticipant.statusCode, 400);
+  assert.equal(missingParticipant.json<JsonObject>().error, "Participant required");
 });
 
 test("rejects structured events from unknown devices or participants", async () => {
@@ -250,6 +278,32 @@ test("applies configured action costs and resource effects", async () => {
   assert.equal(updatedParticipant.resources.battery, 1);
   assert.equal(updatedParticipant.resources.noise, 2);
   assert.equal(body.actionResult.effect.type, "adjustResource");
+});
+
+test("infers participant from a bound device for action events", async () => {
+  const session = await createSession();
+  const code = session.code;
+  const device = await createDevice(code, "Telephone machine");
+  const participant = await createParticipant(code, "Machiniste", "engineer");
+  await bindDevice(code, device.device.id, participant.participant.id);
+  await setResource(code, participant.participant.id, "battery", 2);
+  await setResource(code, participant.participant.id, "noise", 4);
+  await advancePhase(code);
+
+  const actionResponse = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/events`,
+    payload: {
+      type: "action.perform",
+      actionId: "quiet-engines",
+      sourceDeviceId: device.device.id
+    }
+  });
+
+  assert.equal(actionResponse.statusCode, 202);
+  const body = actionResponse.json<JsonObject>();
+  assert.equal(body.actionResult.participantId, participant.participant.id);
+  assert.equal(body.audit.payload.participantId, participant.participant.id);
 });
 
 test("applies configured action state effects from payload", async () => {
@@ -308,6 +362,32 @@ test("resolves available gestures to module actions", async () => {
   assert.equal(body.actionResult.gesture, "phone-face-down");
   assert.equal(updatedParticipant.resources.battery, 1);
   assert.equal(updatedParticipant.resources.noise, 2);
+});
+
+test("infers participant from a bound device for gesture events", async () => {
+  const session = await createSession();
+  const code = session.code;
+  const device = await createDevice(code, "Telephone machine");
+  const participant = await createParticipant(code, "Machiniste", "engineer");
+  await bindDevice(code, device.device.id, participant.participant.id);
+  await setResource(code, participant.participant.id, "battery", 2);
+  await setResource(code, participant.participant.id, "noise", 4);
+  await advancePhase(code);
+
+  const actionResponse = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/events`,
+    payload: {
+      type: "gesture.detected",
+      gesture: "phone-face-down",
+      sourceDeviceId: device.device.id
+    }
+  });
+
+  assert.equal(actionResponse.statusCode, 202);
+  const body = actionResponse.json<JsonObject>();
+  assert.equal(body.actionResult.actionId, "quiet-engines");
+  assert.equal(body.actionResult.participantId, participant.participant.id);
 });
 
 test("rejects gestures when no matching action is currently available", async () => {
