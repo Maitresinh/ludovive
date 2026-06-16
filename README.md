@@ -24,6 +24,8 @@ docs/           Product, architecture, Scrum backlog, module schema
 modules/        Importable game module examples
 ```
 
+The server entrypoint is `apps/server/src/index.ts`; the Fastify application and routes live in `apps/server/src/app.ts` so tests can import the app without starting the production listener.
+
 Current example modules:
 
 - `putsch-lite`

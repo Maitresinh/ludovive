@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
-import { app, resetRuntimeState } from "./index.js";
+import { app, resetRuntimeState } from "./app.js";
 
 type JsonObject = Record<string, any>;
 let liveAddress = "";
