@@ -318,6 +318,12 @@ const sessionMessageSchema = z.object({
   channel: z.string().min(1).default("facilitator")
 });
 
+const resolveResolutionSchema = z.object({
+  outcome: z.string().min(1).default("facilitator-resolved"),
+  note: z.string().max(2000).optional(),
+  payload: z.record(z.unknown()).default({})
+});
+
 const eventSchema = z.object({
   type: z.string().min(1),
   actionId: z.string().min(1).optional(),
@@ -646,6 +652,23 @@ function createSessionMessage(session: Session, input: z.infer<typeof sessionMes
   };
   session.messages.push(message);
   return message;
+}
+
+function resolvePendingResolution(session: Session, resolutionId: string, input: z.infer<typeof resolveResolutionSchema>): Record<string, unknown> {
+  const index = session.pendingResolutions.findIndex((resolution) => resolution.id === resolutionId);
+  if (index === -1) {
+    throw new Error("Resolution not found");
+  }
+
+  const [resolution] = session.pendingResolutions.splice(index, 1);
+  return {
+    resolutionId,
+    resolution,
+    outcome: input.outcome,
+    note: input.note,
+    payload: input.payload,
+    resolvedAt: new Date().toISOString()
+  };
 }
 
 function runSetupDistribution(session: Session): Record<string, unknown> {
@@ -1451,7 +1474,7 @@ function renderIndex(): string {
       byId("pendingResolutions").innerHTML = (session.pendingResolutions || []).map((resolution) => {
         const participant = session.participants.find((candidate) => candidate.id === resolution.participantId);
         const payload = resolution.payload ? JSON.stringify(resolution.payload) : "";
-        return '<div class="item"><strong>' + resolution.type + '</strong><div>' + (participant ? participant.name : "table") + '</div><div class="muted">' + (resolution.mechanicId || resolution.mechanicFamily || "sans mecanique") + '</div><div class="muted">' + payload + '</div></div>';
+        return '<div class="item"><strong>' + resolution.type + '</strong><div>' + (participant ? participant.name : "table") + '</div><div class="muted">' + (resolution.mechanicId || resolution.mechanicFamily || "sans mecanique") + '</div><div class="muted">' + payload + '</div><button class="secondary resolveResolution" data-resolution-id="' + resolution.id + '">Marquer resolue</button></div>';
       }).join("") || '<div class="muted">Aucune resolution en attente</div>';
       byId("audit").textContent = JSON.stringify((session.audit || []).slice(-12), null, 2);
       byId("state").textContent = JSON.stringify(session, null, 2);
@@ -1524,6 +1547,12 @@ function renderIndex(): string {
     }));
     byId("assignRole").addEventListener("click", () => run(async () => {
       await api("/sessions/" + sessionCode + "/players/" + byId("roleParticipant").value + "/role", { method: "POST", body: JSON.stringify({ roleId: byId("assignRoleId").value }) });
+      await refresh();
+    }));
+    byId("pendingResolutions").addEventListener("click", (event) => run(async () => {
+      const button = event.target.closest(".resolveResolution");
+      if (!button) return;
+      await api("/sessions/" + sessionCode + "/resolutions/" + button.dataset.resolutionId + "/resolve", { method: "POST", body: JSON.stringify({ outcome: "facilitator-resolved" }) });
       await refresh();
     }));
     byId("setResource").addEventListener("click", () => run(async () => {
@@ -2057,6 +2086,30 @@ app.post("/sessions/:code/messages", async (request, reply) => {
   return reply.code(202).send({
     accepted: true,
     message,
+    dashboard: dashboardReadModel(session)
+  });
+});
+
+app.post("/sessions/:code/resolutions/:resolutionId/resolve", async (request, reply) => {
+  const { code, resolutionId } = request.params as { code: string; resolutionId: string };
+  const session = getSession(code);
+  if (!session) {
+    return reply.code(404).send({ error: "Session not found" });
+  }
+
+  const input = resolveResolutionSchema.parse(request.body ?? {});
+  let resolveResult: Record<string, unknown>;
+  try {
+    resolveResult = resolvePendingResolution(session, resolutionId, input);
+  } catch (error) {
+    return reply.code(404).send({ error: error instanceof Error ? error.message : "Resolution not found" });
+  }
+
+  audit(session, "resolution.resolved", resolveResult);
+  broadcast(session, "resolution.resolved", session.audit.at(-1));
+  return reply.code(202).send({
+    accepted: true,
+    resolveResult,
     dashboard: dashboardReadModel(session)
   });
 });

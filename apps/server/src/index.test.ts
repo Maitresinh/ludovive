@@ -116,6 +116,7 @@ test("serves a one-page Putsch core demo dashboard", async () => {
   assert.match(response.body, /Corriger/);
   assert.match(response.body, /Attribuer role/);
   assert.match(response.body, /Resolutions/);
+  assert.match(response.body, /Marquer resolue/);
 });
 
 test("serves a mobile participant app for session join", async () => {
@@ -752,6 +753,38 @@ test("opens pending contest resolutions from module mechanics", async () => {
   assert.equal(body.dashboard.pendingResolutions[0].resolution.type, "sealedCommitment");
   assert.equal(body.dashboard.pendingResolutions[0].participantId, participant.participant.id);
   assert.deepEqual(body.dashboard.pendingResolutions[0].payload.leaderIds, ["leader-a", "leader-b"]);
+});
+
+test("lets the facilitator resolve a pending resolution", async () => {
+  const session = await createSession("putsch-lite");
+  const code = session.code;
+  const device = await createDevice(code, "Telephone general");
+  const participant = await createParticipant(code, "General", "general");
+  await bindDevice(code, device.device.id, participant.participant.id);
+  await advancePhase(code);
+  await advancePhase(code);
+
+  const coup = await injectJson("POST", `/sessions/${code}/events`, {
+    type: "action.requested",
+    actionId: "attempt-coup",
+    sourceDeviceId: device.device.id,
+    payload: { leaderIds: ["leader-a", "leader-b"] }
+  });
+  const resolutionId = coup.dashboard.pendingResolutions[0].id;
+
+  const resolved = await injectJson("POST", `/sessions/${code}/resolutions/${resolutionId}/resolve`, {
+    outcome: "manual-test",
+    note: "MJ resolved at table"
+  });
+
+  assert.equal(resolved.accepted, true);
+  assert.equal(resolved.resolveResult.resolutionId, resolutionId);
+  assert.equal(resolved.resolveResult.outcome, "manual-test");
+  assert.equal(resolved.dashboard.pendingResolutions.length, 0);
+  assert.equal(resolved.dashboard.audit.at(-1).type, "resolution.resolved");
+
+  const deviceModel = await injectJson("GET", `/sessions/${code}/read-models/device/${device.device.id}`);
+  assert.deepEqual(deviceModel.pendingResolutions, []);
 });
 
 test("maps participant presence to imaginary zones and applies zone effects", async () => {

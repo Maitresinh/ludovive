@@ -38,6 +38,7 @@ Out of scope:
 - Dashboard answers "who has what?" immediately.
 - Participant read models remain filtered.
 - Audit is understandable enough to reconstruct the table sequence.
+- Facilitator can see and manually close pending rule resolutions.
 
 ## Missing UX To Build
 
