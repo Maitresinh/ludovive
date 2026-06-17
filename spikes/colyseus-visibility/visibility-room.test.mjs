@@ -34,6 +34,16 @@ class ThaumacordVisibilityRoom extends Room {
     }
   }
 
+  reconnectClient(client, audience, afterSequence = 0) {
+    client.audience = audience;
+    this.clients.push(client);
+    client.send("room.reconnected", {
+      readModel: this.readModelFor(audience),
+      missedAudit: this.audit.filter((entry) => entry.sequence > afterSequence),
+      latestSequence: this.audit.length
+    });
+  }
+
   readModelFor(audience) {
     if (audience.kind === "dashboard") {
       return {
@@ -94,3 +104,26 @@ test("a Colyseus room can send filtered per-client read models without shared sc
   assert.equal(dashboard.messages.at(-1).payload.audit.sequence, 1);
 });
 
+test("a Colyseus room still needs Thaumacord audit catch-up after reconnect", () => {
+  const room = new ThaumacordVisibilityRoom();
+  const firstConnection = fakeClient("sonar-device-1");
+  room.connectClient(firstConnection, { kind: "device", participantId: "sonar" });
+  room.acceptEvent({ type: "sonar.ping", participantId: "sonar", payload: { bearing: 47 } });
+  room.clients = room.clients.filter((client) => client !== firstConnection);
+
+  room.acceptEvent({ type: "contact.updated", participantId: "sonar", payload: { bearing: 52 } });
+  room.acceptEvent({ type: "depth.changed", participantId: "sonar", payload: { depth: "periscope" } });
+
+  const reconnected = fakeClient("sonar-device-2");
+  room.reconnectClient(reconnected, { kind: "device", participantId: "sonar" }, 1);
+
+  const reconnectPayload = reconnected.messages.at(-1).payload;
+  assert.equal(reconnected.messages.at(-1).type, "room.reconnected");
+  assert.equal(reconnectPayload.readModel.readModel, "device.participant");
+  assert.equal(reconnectPayload.latestSequence, 3);
+  assert.deepEqual(
+    reconnectPayload.missedAudit.map((entry) => entry.sequence),
+    [2, 3]
+  );
+  assert.equal(reconnectPayload.readModel.participant.secret, "contact nord-est");
+});

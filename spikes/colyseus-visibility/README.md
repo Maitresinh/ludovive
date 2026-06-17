@@ -15,5 +15,6 @@ Current result:
 
 - The visibility test passes.
 - Colyseus can be used with targeted per-client messages for Thaumacord read models.
-- This spike does not yet test Colyseus reconnection.
+- The reconnect/catch-up test passes at Thaumacord room-message level.
+- Colyseus can help recover a room connection, but Thaumacord still needs its audit sequence and filtered sync payload.
 - `npm audit` currently reports vulnerabilities in the Colyseus dependency tree; reassess before adoption.

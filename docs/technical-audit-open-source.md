@@ -71,6 +71,7 @@ Spike result on 2026-06-17:
 - The spike uses targeted `client.send(...)` messages rather than shared schema state.
 - This means Colyseus can host the room/lifecycle layer without forcing all clients to receive the same state.
 - However, adopting Colyseus for Thaumacord would likely mean using it as room/reconnect infrastructure, while keeping Thaumacord's custom read-model and visibility logic.
+- A second test confirms that reconnect still needs Thaumacord-style audit catch-up: the reconnected client receives a filtered read model plus missed audit entries after its last sequence.
 
 Dependency result:
 
@@ -82,13 +83,13 @@ Spike acceptance criteria:
 
 - One Thaumacord session as one Colyseus room.
 - Two devices in same room receive different visibility-filtered payloads. Done in isolated spike.
-- Reconnection can recover missed state. Not tested yet.
+- Reconnection can recover missed state. Tested at room-message level; not yet tested through real Colyseus client/matchmaker transport.
 - Existing audit sequence model can coexist or be replaced cleanly. Partially tested through payload sequence preservation.
 - Test proves dashboard and bound device do not see the same read model. Done.
 
 Next decision:
 
-Do not adopt Colyseus yet. Continue only if the next spike proves reconnect/catch-up is materially better than our current Fastify/WebSocket + audit sync model.
+Do not adopt Colyseus yet. Its room abstraction is compatible with Thaumacord, but it does not remove the need for our audit sequence, filtered read models, and sync endpoint. Continue only if a real transport/matchmaker spike proves its reconnect lifecycle is materially better than our current Fastify/WebSocket + audit sync model.
 
 ## boardgame.io
 
