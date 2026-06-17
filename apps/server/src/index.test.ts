@@ -116,6 +116,34 @@ test("serves a one-page Putsch core demo dashboard", async () => {
   assert.match(response.body, /Corriger/);
 });
 
+test("serves a mobile participant app for session join", async () => {
+  const response = await app.inject({ method: "GET", url: "/play" });
+
+  assert.equal(response.statusCode, 200);
+  assert.match(response.body, /App participant/);
+  assert.match(response.body, /Code MJ/);
+  assert.match(response.body, /Le MJ attribuera/);
+  assert.match(response.body, /Entrer dans la partie/);
+});
+
+test("lets a participant join with a chosen role and receive a filtered read model", async () => {
+  const session = await createSession("putsch-lite");
+  const code = session.code;
+  const joined = await injectJson("POST", `/sessions/${code}/join`, {
+    name: "Ana",
+    roleId: "general"
+  });
+
+  assert.equal(joined.sessionCode, code);
+  assert.equal(joined.participant.name, "Ana");
+  assert.equal(joined.participant.roleId, "general");
+  assert.equal(joined.participant.resources.money, 8);
+  assert.equal(joined.device.participantId, joined.participant.id);
+  assert.equal(joined.readModel.readModel, "device.participant");
+  assert.equal(joined.readModel.participant.id, joined.participant.id);
+  assert.equal(joined.readModel.visibleParticipants.length, 1);
+});
+
 test("loads module mechanics and links actions to them", async () => {
   const modules = await injectJson("GET", "/modules");
   const putschSummary = modules.find((module: JsonObject) => module.id === "putsch-lite");

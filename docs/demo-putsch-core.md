@@ -42,9 +42,11 @@ Out of scope:
 ## Missing UX To Build
 
 - One-page button dashboard for the script: first operational pass exists at `/`.
-- Simple participant page:
+- Simple participant page: first operational pass exists at `/play`.
   - current resources;
   - incoming messages;
-  - exchange form;
   - available actions.
+- Missing from participant page:
+  - exchange form;
+  - action trigger buttons.
 - Seed scenario endpoint or fixture for 3-4 participants: browser dashboard can seed a 4-player `putsch-lite` table.

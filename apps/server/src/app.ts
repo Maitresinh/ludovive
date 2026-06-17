@@ -251,7 +251,8 @@ const createSessionSchema = z.object({
 });
 
 const joinSessionSchema = z.object({
-  name: z.string().min(1).max(80)
+  name: z.string().min(1).max(80),
+  roleId: z.string().min(1).optional()
 });
 
 const registerDeviceSchema = z.object({
@@ -1232,7 +1233,10 @@ function renderIndex(): string {
         <h1>Thaumacord</h1>
         <div class="muted">Putsch au Panador core</div>
       </div>
-      <div id="summary"></div>
+      <div>
+        <a href="/play" class="pill">App participant</a>
+        <span id="summary"></span>
+      </div>
     </div>
 
     <div class="layout">
@@ -1516,9 +1520,160 @@ function renderIndex(): string {
 </html>`;
 }
 
+function renderParticipantApp(): string {
+  return `<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Thaumacord Participant</title>
+  <style>
+    :root { color-scheme: dark; --bg: #101214; --panel: #181b1f; --line: #343a42; --ink: #f2f4f5; --muted: #aab2bb; --accent: #b94b42; --green: #3f6b4d; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, sans-serif; background: var(--bg); color: var(--ink); }
+    main { width: min(560px, 100%); margin: 0 auto; padding: 16px; }
+    h1 { margin: 0 0 4px; font-size: 26px; }
+    h2 { margin: 0 0 12px; font-size: 18px; }
+    section { border: 1px solid var(--line); border-radius: 8px; padding: 14px; background: var(--panel); margin: 14px 0; }
+    label { display: block; margin: 10px 0 5px; color: var(--muted); font-size: 13px; }
+    input, select, button { width: 100%; font: inherit; border-radius: 6px; border: 1px solid #4b535d; padding: 11px; }
+    input, select { background: #0d0f11; color: var(--ink); }
+    button { background: var(--accent); color: white; cursor: pointer; margin-top: 12px; min-height: 44px; }
+    button.secondary { background: #315875; }
+    button.success { background: var(--green); }
+    .muted { color: var(--muted); }
+    .pill { display: inline-block; padding: 4px 8px; border: 1px solid #59616b; border-radius: 999px; margin: 2px; font-size: 12px; color: #dce1e6; }
+    .stack { display: grid; gap: 10px; }
+    .item { border: 1px solid #2f353c; border-radius: 8px; padding: 10px; background: #111417; }
+    .error { color: #ffb1a8; min-height: 20px; }
+    .hidden { display: none; }
+    pre { white-space: pre-wrap; background: #0d0f11; padding: 12px; border-radius: 6px; overflow: auto; max-height: 260px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Thaumacord</h1>
+    <div class="muted">App participant</div>
+
+    <section id="joinPanel">
+      <h2>Rejoindre une session</h2>
+      <label for="code">Code MJ</label>
+      <input id="code" autocomplete="off" placeholder="ABC123" />
+      <button id="loadSession" class="secondary">Charger les roles</button>
+      <label for="name">Nom</label>
+      <input id="name" autocomplete="name" placeholder="Ana" />
+      <label for="roleId">Role</label>
+      <select id="roleId"><option value="">Le MJ attribuera</option></select>
+      <button id="join">Entrer dans la partie</button>
+      <div class="error" id="error"></div>
+    </section>
+
+    <section id="tablePanel" class="hidden">
+      <h2 id="participantTitle">Participant</h2>
+      <div id="summary"></div>
+      <h3>Ressources</h3>
+      <div id="resources" class="stack"></div>
+      <h3>Messages</h3>
+      <div id="messages" class="stack"></div>
+      <h3>Actions disponibles</h3>
+      <div id="actions" class="stack"></div>
+      <button id="leave" class="secondary">Oublier cet appareil</button>
+    </section>
+
+    <section>
+      <h2>Etat appareil</h2>
+      <pre id="state">Non connecte.</pre>
+    </section>
+  </main>
+  <script>
+    let liveSocket;
+    let deviceId = localStorage.getItem("thaumacord.deviceId") || "";
+    let sessionCode = localStorage.getItem("thaumacord.sessionCode") || "";
+    function byId(id) { return document.querySelector("#" + id); }
+    function option(value, label) { return '<option value="' + value + '">' + label + '</option>'; }
+    function setError(message) { byId("error").textContent = message || ""; }
+    async function api(url, options) {
+      const res = await fetch(url, { headers: { "content-type": "application/json" }, ...options });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+    async function run(action) {
+      try {
+        setError("");
+        await action();
+      } catch (error) {
+        setError(error.message);
+      }
+    }
+    async function loadSession() {
+      const code = byId("code").value.trim().toUpperCase();
+      if (!code) return;
+      const session = await api("/sessions/" + code);
+      byId("roleId").innerHTML = option("", "Le MJ attribuera") + session.module.roles.map((role) => option(role.id, role.name)).join("");
+      sessionCode = session.code;
+      byId("code").value = session.code;
+    }
+    function connectLive(code, id) {
+      if (liveSocket) liveSocket.close();
+      const protocol = location.protocol === "https:" ? "wss" : "ws";
+      liveSocket = new WebSocket(protocol + "://" + location.host + "/sessions/" + code + "/live?deviceId=" + id);
+      liveSocket.addEventListener("message", (event) => {
+        const data = JSON.parse(event.data);
+        if (data.readModel) render(data.readModel);
+      });
+    }
+    function render(model) {
+      byId("state").textContent = JSON.stringify(model, null, 2);
+      if (model.readModel === "device.unbound") {
+        byId("joinPanel").classList.remove("hidden");
+        byId("tablePanel").classList.add("hidden");
+        return;
+      }
+      byId("joinPanel").classList.add("hidden");
+      byId("tablePanel").classList.remove("hidden");
+      byId("participantTitle").textContent = model.participant.name;
+      byId("summary").innerHTML = [
+        '<span class="pill">' + model.module.name + '</span>',
+        '<span class="pill">Phase ' + model.phase.name + '</span>',
+        '<span class="pill">' + (model.participant.roleId || "role a attribuer") + '</span>'
+      ].join(" ");
+      byId("resources").innerHTML = Object.entries(model.participant.resources || {}).map(([key, value]) => '<div class="item"><strong>' + key + '</strong><div>' + value + '</div></div>').join("") || '<div class="muted">Aucune ressource</div>';
+      byId("messages").innerHTML = (model.messages || []).slice(-5).map((message) => '<div class="item"><strong>' + message.channel + '</strong><div>' + message.text + '</div></div>').join("") || '<div class="muted">Aucun message</div>';
+      byId("actions").innerHTML = (model.availableActions || []).filter((action) => action.available).map((action) => '<div class="item"><strong>' + action.name + '</strong><div class="muted">' + (action.fallback || action.id) + '</div></div>').join("") || '<div class="muted">Aucune action disponible</div>';
+    }
+    byId("loadSession").addEventListener("click", () => run(loadSession));
+    byId("join").addEventListener("click", () => run(async () => {
+      const selectedRoleId = byId("roleId").value;
+      await loadSession();
+      const payload = { name: byId("name").value.trim() };
+      if (selectedRoleId) payload.roleId = selectedRoleId;
+      const result = await api("/sessions/" + sessionCode + "/join", { method: "POST", body: JSON.stringify(payload) });
+      deviceId = result.device.id;
+      sessionCode = result.sessionCode;
+      localStorage.setItem("thaumacord.deviceId", deviceId);
+      localStorage.setItem("thaumacord.sessionCode", sessionCode);
+      connectLive(sessionCode, deviceId);
+      render(result.readModel);
+    }));
+    byId("leave").addEventListener("click", () => {
+      localStorage.removeItem("thaumacord.deviceId");
+      localStorage.removeItem("thaumacord.sessionCode");
+      location.reload();
+    });
+    if (sessionCode) byId("code").value = sessionCode;
+    if (sessionCode && deviceId) {
+      connectLive(sessionCode, deviceId);
+      api("/sessions/" + sessionCode + "/devices/" + deviceId + "/sync").then((result) => render(result.readModel)).catch(() => {});
+    }
+  </script>
+</body>
+</html>`;
+}
+
 await loadModules();
 
 app.get("/", async (_request, reply) => reply.type("text/html").send(renderIndex()));
+app.get("/play", async (_request, reply) => reply.type("text/html").send(renderParticipantApp()));
 app.get("/health", async () => ({ ok: true, service: "thaumacord-server" }));
 
 app.get("/sessions/:code/live", { websocket: true }, (connection, request) => {
@@ -1628,7 +1783,11 @@ app.post("/sessions/:code/join", async (request, reply) => {
   }
 
   const input = joinSessionSchema.parse(request.body);
-  const participant = createParticipant(module, { name: input.name, kind: "person" });
+  if (input.roleId && !module.roles.some((role) => role.id === input.roleId)) {
+    return reply.code(400).send({ error: "Unknown role" });
+  }
+
+  const participant = createParticipant(module, { name: input.name, kind: "person", roleId: input.roleId });
   const device: Device = {
     id: crypto.randomUUID(),
     name: input.name,
@@ -1640,9 +1799,15 @@ app.post("/sessions/:code/join", async (request, reply) => {
   session.participants.push(participant);
   session.devices.push(device);
   audit(session, "device.registered", { deviceId: device.id, name: device.name });
-  audit(session, "participant.joined", { participantId: participant.id, name: participant.name });
+  audit(session, "participant.joined", { participantId: participant.id, name: participant.name, roleId: participant.roleId });
   audit(session, "participant.bound_to_device", { participantId: participant.id, deviceId: device.id });
-  return reply.code(201).send({ device, participant, sessionCode: session.code });
+  broadcast(session, "participant.joined", { participantId: participant.id, deviceId: device.id });
+  return reply.code(201).send({
+    device,
+    participant,
+    sessionCode: session.code,
+    readModel: readModelForAudience(session, { kind: "device", deviceId: device.id })
+  });
 });
 
 app.post("/sessions/:code/devices", async (request, reply) => {
