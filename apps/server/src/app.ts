@@ -1401,6 +1401,10 @@ function renderIndex(): string {
               <div id="messages" class="list"></div>
             </div>
             <div>
+              <h3>Echanges</h3>
+              <div id="exchangeLog" class="list"></div>
+            </div>
+            <div>
               <h3>Resolutions</h3>
               <div id="pendingResolutions" class="list"></div>
             </div>
@@ -1508,6 +1512,12 @@ function renderIndex(): string {
       }).join("") || '<div class="muted">Aucun appareil</div>';
       byId("aggregates").textContent = JSON.stringify(session.aggregates || {}, null, 2);
       byId("messages").innerHTML = (session.messages || []).slice(-6).map((message) => '<div class="item"><strong>' + message.channel + '</strong><div>' + message.text + '</div><div class="muted">' + message.target + '</div></div>').join("") || '<div class="muted">Aucun message</div>';
+      byId("exchangeLog").innerHTML = (session.exchanges || []).slice(-8).map((exchange) => {
+        const from = session.participants.find((participant) => participant.id === exchange.fromParticipantId);
+        const to = session.participants.find((participant) => participant.id === exchange.toParticipantId);
+        const resources = Object.entries(exchange.resources).map(([key, value]) => dashboardResourceLabel(session, key) + ": " + value).join(" / ");
+        return '<div class="item"><strong>' + (from ? from.name : "source inconnue") + ' -> ' + (to ? to.name : "cible inconnue") + '</strong><div>' + resources + '</div><div class="muted">' + exchange.status + '</div></div>';
+      }).join("") || '<div class="muted">Aucun echange</div>';
       byId("pendingResolutions").innerHTML = (session.pendingResolutions || []).map((resolution) => {
         const participant = session.participants.find((candidate) => candidate.id === resolution.participantId);
         const payload = resolution.payload ? JSON.stringify(resolution.payload) : "";

@@ -113,6 +113,7 @@ test("serves a one-page Putsch core demo dashboard", async () => {
   assert.match(response.body, /Putsch au Panador core/);
   assert.match(response.body, /Scenario 4 joueurs/);
   assert.match(response.body, /Transferer/);
+  assert.match(response.body, /Echanges/);
   assert.match(response.body, /Corriger/);
   assert.match(response.body, /Attribuer role/);
   assert.match(response.body, /Resolutions/);
