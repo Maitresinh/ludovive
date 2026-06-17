@@ -114,6 +114,7 @@ test("serves a one-page Putsch core demo dashboard", async () => {
   assert.match(response.body, /Scenario 4 joueurs/);
   assert.match(response.body, /Transferer/);
   assert.match(response.body, /Corriger/);
+  assert.match(response.body, /Attribuer role/);
 });
 
 test("serves a mobile participant app for session join", async () => {
@@ -144,6 +145,22 @@ test("lets a participant join with a chosen role and receive a filtered read mod
   assert.equal(joined.readModel.readModel, "device.participant");
   assert.equal(joined.readModel.participant.id, joined.participant.id);
   assert.equal(joined.readModel.visibleParticipants.length, 1);
+});
+
+test("lets the facilitator assign a role after participant join", async () => {
+  const session = await createSession("putsch-lite");
+  const code = session.code;
+  const joined = await injectJson("POST", `/sessions/${code}/join`, { name: "Ana" });
+
+  assert.equal(joined.participant.roleId, undefined);
+  assert.equal(joined.participant.resources.money, 0);
+
+  await injectJson("POST", `/sessions/${code}/players/${joined.participant.id}/role`, { roleId: "dealer" });
+  const participantSync = await injectJson("GET", `/sessions/${code}/devices/${joined.device.id}/sync`);
+
+  assert.equal(participantSync.readModel.participant.roleId, "dealer");
+  assert.equal(participantSync.readModel.participant.resources.money, 12);
+  assert.equal(participantSync.audit.entries.at(-1).type, "role.assigned");
 });
 
 test("loads module mechanics and links actions to them", async () => {

@@ -1301,6 +1301,13 @@ function renderIndex(): string {
           <textarea id="messageText">Le marche ouvre.</textarea>
           <button id="sendMessage">Envoyer</button>
 
+          <h3>Role</h3>
+          <label for="roleParticipant">Participant</label>
+          <select id="roleParticipant"></select>
+          <label for="assignRoleId">Role a attribuer</label>
+          <select id="assignRoleId"></select>
+          <button id="assignRole" class="secondary">Attribuer role</button>
+
           <h3>Correction</h3>
           <label for="resourceParticipant">Participant</label>
           <select id="resourceParticipant"></select>
@@ -1406,6 +1413,7 @@ function renderIndex(): string {
     async function loadModuleDetails(moduleId) {
       const module = await api("/modules/" + moduleId);
       byId("roleId").innerHTML = module.roles.map((role) => option(role.id, role.name)).join("");
+      byId("assignRoleId").innerHTML = module.roles.map((role) => option(role.id, role.name)).join("");
       byId("exchangeResource").innerHTML = module.resources.map((resource) => option(resource.id, resource.name)).join("");
       byId("resourceId").innerHTML = module.resources.map((resource) => option(resource.id, resource.name)).join("");
     }
@@ -1447,6 +1455,7 @@ function renderIndex(): string {
       byId("exchangeFrom").innerHTML = participantOptions;
       byId("exchangeTo").innerHTML = participantOptions;
       byId("resourceParticipant").innerHTML = participantOptions;
+      byId("roleParticipant").innerHTML = participantOptions;
       byId("messageTarget").innerHTML = messageOptions;
       byId("bindDeviceId").innerHTML = session.devices.map((device) => option(device.id, device.name + (device.participantId ? " (lie)" : ""))).join("");
     }
@@ -1502,6 +1511,10 @@ function renderIndex(): string {
         ? { target: "participant", participantId: selected.slice("participant:".length), text: byId("messageText").value, channel: "facilitator" }
         : { target: selected, text: byId("messageText").value, channel: "facilitator" };
       await api("/sessions/" + sessionCode + "/messages", { method: "POST", body: JSON.stringify(payload) });
+      await refresh();
+    }));
+    byId("assignRole").addEventListener("click", () => run(async () => {
+      await api("/sessions/" + sessionCode + "/players/" + byId("roleParticipant").value + "/role", { method: "POST", body: JSON.stringify({ roleId: byId("assignRoleId").value }) });
       await refresh();
     }));
     byId("setResource").addEventListener("click", () => run(async () => {
