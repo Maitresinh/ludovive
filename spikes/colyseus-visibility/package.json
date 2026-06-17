@@ -1,0 +1,13 @@
+{
+  "name": "@thaumacord/spike-colyseus-visibility",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test visibility-room.test.mjs"
+  },
+  "dependencies": {
+    "colyseus": "0.17.10",
+    "zod": "^4.1.12"
+  }
+}

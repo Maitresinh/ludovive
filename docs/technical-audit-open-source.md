@@ -63,15 +63,32 @@ Risks:
 
 Decision:
 
-Run a spike. Do not migrate yet.
+Spike started. Do not migrate yet.
+
+Spike result on 2026-06-17:
+
+- A minimal isolated Colyseus room can send different filtered read models to dashboard, bound device, and unbound device clients.
+- The spike uses targeted `client.send(...)` messages rather than shared schema state.
+- This means Colyseus can host the room/lifecycle layer without forcing all clients to receive the same state.
+- However, adopting Colyseus for Thaumacord would likely mean using it as room/reconnect infrastructure, while keeping Thaumacord's custom read-model and visibility logic.
+
+Dependency result:
+
+- Colyseus 0.17.10 expects Zod 4 as an optional peer dependency through `@colyseus/core`, while the current Thaumacord server uses Zod 3.
+- The spike is therefore isolated in `spikes/colyseus-visibility` and uses its own package manifest.
+- `npm audit` reports 8 vulnerabilities in the isolated Colyseus dependency tree, including moderate issues through optional auth/playground dependencies. These must be reassessed before production adoption.
 
 Spike acceptance criteria:
 
 - One Thaumacord session as one Colyseus room.
-- Two devices in same room receive different visibility-filtered payloads.
-- Reconnection can recover missed state.
-- Existing audit sequence model can coexist or be replaced cleanly.
-- Test proves dashboard and bound device do not see the same read model.
+- Two devices in same room receive different visibility-filtered payloads. Done in isolated spike.
+- Reconnection can recover missed state. Not tested yet.
+- Existing audit sequence model can coexist or be replaced cleanly. Partially tested through payload sequence preservation.
+- Test proves dashboard and bound device do not see the same read model. Done.
+
+Next decision:
+
+Do not adopt Colyseus yet. Continue only if the next spike proves reconnect/catch-up is materially better than our current Fastify/WebSocket + audit sync model.
 
 ## boardgame.io
 
