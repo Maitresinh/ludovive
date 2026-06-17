@@ -362,11 +362,21 @@ const resolutionAdjustSessionCounterEffectSchema = z.object({
   max: z.number().optional()
 });
 
+const resolutionScaleSessionCounterEffectSchema = z.object({
+  type: z.literal("scaleSessionCounter"),
+  state: z.string().min(1),
+  factor: z.number().positive(),
+  rounding: z.enum(["floor", "ceil", "round"]).default("round"),
+  min: z.number().optional(),
+  max: z.number().optional()
+});
+
 const resolutionEffectSchema = z.discriminatedUnion("type", [
   resolutionResourceDeltaEffectSchema,
   resolutionSetStateEffectSchema,
   resolutionSetSessionStateEffectSchema,
-  resolutionAdjustSessionCounterEffectSchema
+  resolutionAdjustSessionCounterEffectSchema,
+  resolutionScaleSessionCounterEffectSchema
 ]);
 const resolutionOutcomeSchema = z.object({
   id: z.string().min(1),
@@ -739,6 +749,12 @@ function resolutionEffects(resolution: PendingResolution, input: z.infer<typeof 
   return [...declaredEffects, ...z.array(resolutionEffectSchema).parse(input.payload.effects)];
 }
 
+function roundedCounter(value: number, rounding: "floor" | "ceil" | "round"): number {
+  if (rounding === "floor") return Math.floor(value);
+  if (rounding === "ceil") return Math.ceil(value);
+  return Math.round(value);
+}
+
 function applyResolutionEffects(session: Session, resolution: PendingResolution, input: z.infer<typeof resolveResolutionSchema>): Record<string, unknown>[] {
   const module = getModuleOrThrow(session.moduleId);
   const effects = resolutionEffects(resolution, input);
@@ -755,6 +771,18 @@ function applyResolutionEffects(session: Session, resolution: PendingResolution,
         throw new Error(`Session state ${effect.state} is not numeric`);
       }
       const after = before + effect.delta;
+      if (effect.min !== undefined && after < effect.min) {
+        throw new Error(`Session state ${effect.state} would be below minimum`);
+      }
+      if (effect.max !== undefined && after > effect.max) {
+        throw new Error(`Session state ${effect.state} would be above maximum`);
+      }
+    } else if (effect.type === "scaleSessionCounter") {
+      const before = Number(session.statuses[effect.state] ?? 0);
+      if (!Number.isFinite(before)) {
+        throw new Error(`Session state ${effect.state} is not numeric`);
+      }
+      const after = roundedCounter(before * effect.factor, effect.rounding);
       if (effect.min !== undefined && after < effect.min) {
         throw new Error(`Session state ${effect.state} would be below minimum`);
       }
@@ -782,6 +810,12 @@ function applyResolutionEffects(session: Session, resolution: PendingResolution,
     if (effect.type === "adjustSessionCounter") {
       const before = Number(session.statuses[effect.state] ?? 0);
       const after = before + effect.delta;
+      session.statuses[effect.state] = after;
+      return { type: effect.type, state: effect.state, before, after };
+    }
+    if (effect.type === "scaleSessionCounter") {
+      const before = Number(session.statuses[effect.state] ?? 0);
+      const after = roundedCounter(before * effect.factor, effect.rounding);
       session.statuses[effect.state] = after;
       return { type: effect.type, state: effect.state, before, after };
     }
@@ -1769,6 +1803,7 @@ function renderIndex(): string {
       if (effect.type === "adjustResource") return target + dashboardResourceLabel(session, effect.resource) + " " + (effect.delta > 0 ? "+" : "") + effect.delta;
       if (effect.type === "setState") return target + effect.state + " = " + (effect.value === undefined ? "true" : effect.value);
       if (effect.type === "adjustSessionCounter") return effect.state + " " + (effect.delta > 0 ? "+" : "") + effect.delta;
+      if (effect.type === "scaleSessionCounter") return effect.state + " x" + effect.factor;
       if (effect.type === "setSessionState") return effect.state + " = " + (effect.value === undefined ? "true" : effect.value);
       return target + effect.type;
     }

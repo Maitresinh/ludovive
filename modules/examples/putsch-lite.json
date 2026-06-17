@@ -3,24 +3,36 @@
   "name": "Putsch Lite",
   "version": "0.1.0",
   "timeline": {
-    "regularCouncilEveryTurns": 3,
+    "regularCouncilEverySeconds": 3600,
     "councilAfterCoup": true,
-    "councilPhaseId": "first-council"
+    "councilPhaseId": "first-council",
+    "copperPriceIncreasePerHour": 1000
   },
   "state": {
-    "copperPrice": 10,
-    "firstCouncilDue": false
+    "copperPrice": 1000,
+    "firstCouncilDue": false,
+    "sharesAvailableThisHour": 20,
+    "sharesPerBuyerLimit": 5,
+    "directorSharesForSalePerHour": 6
   },
   "players": {
     "min": 4,
     "max": 12
   },
   "resources": [
-    { "id": "money", "name": "Pesos", "visibility": "private", "min": 0 },
+    { "id": "money", "name": "Escudos", "visibility": "private", "min": 0 },
     { "id": "copperShares", "name": "Actions des mines de cuivre", "visibility": "private", "min": 0 },
     { "id": "weapons", "name": "Armes", "visibility": "private", "min": 0 },
     { "id": "ammo", "name": "Munitions", "visibility": "private", "min": 0 },
-    { "id": "influence", "name": "Influence", "visibility": "private", "min": 0 }
+    { "id": "influence", "name": "Influence", "visibility": "private", "min": 0 },
+    { "id": "cf25", "name": "25 caisses de fusils", "visibility": "private", "min": 0 },
+    { "id": "cf50", "name": "50 caisses de fusils", "visibility": "private", "min": 0 },
+    { "id": "cf100", "name": "100 caisses de fusils", "visibility": "private", "min": 0 },
+    { "id": "cm25", "name": "25 caisses de munitions", "visibility": "private", "min": 0 },
+    { "id": "cm50", "name": "50 caisses de munitions", "visibility": "private", "min": 0 },
+    { "id": "cm100", "name": "100 caisses de munitions", "visibility": "private", "min": 0 },
+    { "id": "drugBags", "name": "Sacs de drogue", "visibility": "private", "min": 0 },
+    { "id": "voteBallots", "name": "Bulletins de vote", "visibility": "private", "min": 0 }
   ],
   "phases": [
     { "id": "market", "name": "Marche", "durationSeconds": 600 },
@@ -44,10 +56,52 @@
     },
     {
       "id": "facilitator-capitalist",
-      "name": "MJ capitaliste",
-      "startingResources": { "money": 20, "copperShares": 6, "weapons": 0, "ammo": 0, "influence": 3 },
-      "responsibilities": ["Arbitrer la table", "Gerer les actions des mines de cuivre", "Sieger au premier conseil"],
-      "victoryCondition": { "type": "text", "text": "Gagne en terminant avec le plus de pesos." }
+      "name": "Paquito Borrachon",
+      "officialRole": "President des mines de cuivre d'Alcabal et meneur de jeu.",
+      "secretRole": "Aucun role secret.",
+      "startingResources": { "money": 0, "copperShares": 50, "weapons": 0, "ammo": 0, "influence": 3 },
+      "responsibilities": ["Arbitrer la table", "Gerer les actions des mines de cuivre", "Sieger au premier conseil si elu"],
+      "victoryCondition": { "type": "text", "text": "Gagne en terminant avec le plus d'escudos; les actions restantes valent la moitie du cours." }
+    },
+    {
+      "id": "kgb-agent",
+      "name": "James Stones",
+      "officialRole": "Negociant en matieres premieres, notamment cuivre.",
+      "secretRole": "Agent du KGB; vendre des armes aux deux forces armees.",
+      "startingResources": { "money": 20000, "cf50": 2, "cf25": 2, "cm100": 1, "cm25": 2, "cm50": 1, "voteBallots": 8 },
+      "victoryCondition": { "type": "text", "text": "Accumuler des escudos par le commerce et l'influence politique." }
+    },
+    {
+      "id": "cia-agent",
+      "name": "Giani Forlano",
+      "officialRole": "Marchand de bananes.",
+      "secretRole": "Agent de la CIA; vendre des armes aux deux forces armees.",
+      "startingResources": { "money": 20000, "cf100": 2, "cf25": 2, "cm100": 1, "cm50": 2, "voteBallots": 8 },
+      "victoryCondition": { "type": "text", "text": "Accumuler des escudos par le commerce et l'influence politique." }
+    },
+    {
+      "id": "drug-trafficker",
+      "name": "Vladimir Doukorof",
+      "officialRole": "Marchand de fusils de chasse.",
+      "secretRole": "Trafiquant de drogue; ecouler le plus possible de sacs de drogue.",
+      "startingResources": { "money": 15000, "drugBags": 5, "cm25": 1, "voteBallots": 8 },
+      "victoryCondition": { "type": "text", "text": "Transformer la drogue et les arrangements en escudos." }
+    },
+    {
+      "id": "fun-agent",
+      "name": "Raul Belgrano",
+      "officialRole": "Specialiste des reserves de chasse.",
+      "secretRole": "Representant du FUN, au pouvoir au debut de partie.",
+      "startingResources": { "money": 15000, "cf50": 1, "cf25": 2, "cm50": 1, "cm25": 1, "drugBags": 1, "voteBallots": 8 },
+      "victoryCondition": { "type": "text", "text": "Conserver ou reprendre le pouvoir; le camp au pouvoir en fin de partie double son total." }
+    },
+    {
+      "id": "gag-agent",
+      "name": "Miltos Agripnakis",
+      "officialRole": "Proprietaire terrien.",
+      "secretRole": "Agent des forces armees du GAG, dans l'opposition au debut.",
+      "startingResources": { "money": 15000, "cf100": 1, "cf25": 1, "cm50": 1, "cm25": 2, "voteBallots": 8 },
+      "victoryCondition": { "type": "text", "text": "Prendre puis conserver le pouvoir; le camp au pouvoir en fin de partie double son total." }
     }
   ],
   "mechanics": [
@@ -60,7 +114,7 @@
       "inputs": [
         { "id": "fromParticipantId", "type": "participant", "source": "actor-or-bound-device" },
         { "id": "toParticipantId", "type": "participant" },
-        { "id": "resources", "type": "resource-bundle", "allowed": ["money", "weapons", "ammo"] }
+        { "id": "resources", "type": "resource-bundle", "allowed": ["money", "weapons", "ammo", "copperShares", "cf25", "cf50", "cf100", "cm25", "cm50", "cm100", "drugBags"] }
       ],
       "resolution": { "type": "exchange", "mode": "immediate" },
       "visibility": { "dashboard": "full", "participants": "involved-only" },
@@ -94,7 +148,7 @@
             "description": "La tentative de coup reussit.",
             "effects": [
               { "type": "setState", "state": "coupOutcome", "value": "attacker-wins" },
-              { "type": "adjustSessionCounter", "state": "copperPrice", "delta": -1, "min": 1 },
+              { "type": "scaleSessionCounter", "state": "copperPrice", "factor": 0.5, "rounding": "floor", "min": 1 },
               { "type": "setSessionState", "state": "firstCouncilDue", "value": true }
             ]
           },
@@ -104,7 +158,7 @@
             "description": "La tentative de coup echoue.",
             "effects": [
               { "type": "setState", "state": "coupOutcome", "value": "defender-wins" },
-              { "type": "adjustSessionCounter", "state": "copperPrice", "delta": 1, "min": 1 },
+              { "type": "adjustSessionCounter", "state": "copperPrice", "delta": 1000, "min": 1 },
               { "type": "setSessionState", "state": "firstCouncilDue", "value": true }
             ]
           },
@@ -155,7 +209,7 @@
       "phase": "first-council",
       "actor": "facilitator-capitalist",
       "target": "self",
-      "effect": { "type": "adjustResource", "resource": "money", "delta": 3 },
+      "effect": { "type": "adjustResource", "resource": "money", "delta": 5000 },
       "fallback": "facilitator-confirmation"
     }
   ],
