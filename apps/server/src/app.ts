@@ -111,6 +111,15 @@ type AuditEntry = {
   payload: unknown;
 };
 
+type PendingHazard = {
+  id: string;
+  participantId: string;
+  zoneId: string;
+  resourceId: string;
+  status: "pending";
+  createdAt: string;
+};
+
 type Audience =
   | { kind: "dashboard" }
   | { kind: "device"; deviceId?: string };
@@ -123,6 +132,7 @@ type Session = {
   participants: Participant[];
   unlockedPhases: string[];
   risks: Record<string, number>;
+  pendingHazards: PendingHazard[];
   nextAuditSequence: number;
   audit: AuditEntry[];
 };
@@ -412,7 +422,7 @@ function applyEffect(module: GameModule, participant: Participant, effect: Known
   return { type: effect.type, precision: effect.precision };
 }
 
-function applyZoneEffect(session: Session, effect: KnownZoneEffect): Record<string, unknown> {
+function applyZoneEffect(session: Session, participant: Participant, zoneId: string, effect: KnownZoneEffect): Record<string, unknown> {
   if (effect.type === "unlockPhase") {
     if (!session.unlockedPhases.includes(effect.phase)) {
       session.unlockedPhases.push(effect.phase);
@@ -427,7 +437,16 @@ function applyZoneEffect(session: Session, effect: KnownZoneEffect): Record<stri
     return { type: effect.type, risk: effect.risk, before, after };
   }
 
-  return { type: effect.type, resource: effect.resource, pending: true };
+  const pendingHazard: PendingHazard = {
+    id: crypto.randomUUID(),
+    participantId: participant.id,
+    zoneId,
+    resourceId: effect.resource,
+    status: "pending",
+    createdAt: new Date().toISOString()
+  };
+  session.pendingHazards.push(pendingHazard);
+  return { type: effect.type, resource: effect.resource, pending: true, hazardId: pendingHazard.id };
 }
 
 function enterZone(session: Session, participantId: string, zoneId: string): Record<string, unknown> {
@@ -446,7 +465,7 @@ function enterZone(session: Session, participantId: string, zoneId: string): Rec
   participant.locationId = zone.id;
   const effects = zone.effects.map((effect) => {
     const parsedEffect = knownZoneEffectSchema.safeParse(effect);
-    return parsedEffect.success ? applyZoneEffect(session, parsedEffect.data) : { type: "unsupported", effect };
+    return parsedEffect.success ? applyZoneEffect(session, participant, zone.id, parsedEffect.data) : { type: "unsupported", effect };
   });
 
   return {
@@ -691,6 +710,7 @@ function participantReadModel(session: Session, participantId: string): Record<s
     phase: currentPhase(session),
     participant,
     availableActions: actionAvailability(session, participant),
+    pendingHazards: session.pendingHazards.filter((hazard) => hazard.participantId === participant.id),
     visibleParticipants: session.participants.map((candidate) => ({
       id: candidate.id,
       kind: candidate.kind,
@@ -916,6 +936,7 @@ app.post("/sessions", async (request, reply) => {
     participants: [],
     unlockedPhases: [module.phases[0].id],
     risks: {},
+    pendingHazards: [],
     nextAuditSequence: 1,
     audit: []
   };

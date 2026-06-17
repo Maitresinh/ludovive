@@ -334,6 +334,33 @@ test("maps participant presence to imaginary zones and applies zone effects", as
   assert.equal(zoneResponse.zoneResult.effects.length, 2);
 });
 
+test("records pending zone hazards and filters them for bound devices", async () => {
+  const session = await createSession();
+  const code = session.code;
+  const sonarDevice = await createDevice(code, "Telephone sonar");
+  const engineerDevice = await createDevice(code, "Telephone machines");
+  const sonar = await createParticipant(code, "Station sonar", "sonar");
+  const engineer = await createParticipant(code, "Station machines", "engineer");
+  await bindDevice(code, sonarDevice.device.id, sonar.participant.id);
+  await bindDevice(code, engineerDevice.device.id, engineer.participant.id);
+
+  const zoneResponse = await enterZone(code, "depth-charge-field", sonar.participant.id, sonarDevice.device.id);
+
+  const pendingEffect = zoneResponse.zoneResult.effects.find((effect: JsonObject) => effect.type === "periodicDamageCheck");
+  assert.equal(pendingEffect.pending, true);
+  assert.equal(pendingEffect.resource, "hull");
+  assert.equal(zoneResponse.dashboard.pendingHazards.length, 1);
+  assert.equal(zoneResponse.dashboard.pendingHazards[0].id, pendingEffect.hazardId);
+  assert.equal(zoneResponse.dashboard.pendingHazards[0].participantId, sonar.participant.id);
+  assert.equal(zoneResponse.dashboard.pendingHazards[0].zoneId, "depth-charge-field");
+
+  const sonarModel = await injectJson("GET", `/sessions/${code}/read-models/device/${sonarDevice.device.id}`);
+  const engineerModel = await injectJson("GET", `/sessions/${code}/read-models/device/${engineerDevice.device.id}`);
+  assert.equal(sonarModel.pendingHazards.length, 1);
+  assert.equal(sonarModel.pendingHazards[0].resourceId, "hull");
+  assert.deepEqual(engineerModel.pendingHazards, []);
+});
+
 test("infers participant from a bound device for zone presence", async () => {
   const session = await createSession();
   const code = session.code;
