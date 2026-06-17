@@ -46,13 +46,27 @@ Actions bind to mechanisms with `mechanicId`. The action remains the player-faci
 
 ## Initial Implementation Priority
 
-1. `exchange`: direct transfer is already implemented; add pending/accepted/cancelled exchanges next.
-2. `facilitator-action`: dashboard receives, approves, rejects, edits, reveals, and sends.
-3. `petition` plus `vote`: enough to model council games and day-vote social deduction.
-4. `contest`: sealed commitments and opposed checks.
+1. `exchange`: direct transfer is implemented; add pending/accepted/cancelled exchanges next.
+2. `petition` plus `vote`: opening pending petition resolutions is implemented; add vote collection and authority decision next.
+3. `contest`: opening pending contest resolutions is implemented; add sealed commitments and opposed checks next.
+4. `facilitator-action`: dashboard receives, approves, rejects, edits, reveals, and sends.
 5. `triggered-ability`: counters, immunities, once-per-turn abilities.
 6. `hidden-role` and `information-action`: Mafia/Werewolf/Blood-on-the-Clocktower-like support.
 7. `card-or-object`: generalized cards, documents, status cards, physical/object tokens.
+
+## Current Runner Behavior
+
+When an action has a `mechanicId` and its effect is not one of the immediate built-in effects, the server can open a `pendingResolution` for workflow families such as `petition`, `vote`, and `contest`.
+
+The pending resolution stores:
+
+- the participant who opened it;
+- the action id;
+- the mechanic id and family;
+- the original event payload;
+- the module-declared `resolution` and `visibility` policy.
+
+This deliberately does not decide the outcome yet. Follow-up runners will collect votes, sealed commitments, facilitator decisions, or other inputs before closing the resolution.
 
 ## Design Notes
 

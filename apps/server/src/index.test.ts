@@ -51,6 +51,10 @@ async function advancePhase(code: string): Promise<JsonObject> {
   return injectJson("POST", `/sessions/${code}/phases/advance`, {});
 }
 
+async function setPhaseTimer(code: string, payload: JsonObject): Promise<JsonObject> {
+  return injectJson("POST", `/sessions/${code}/phases/timer`, payload);
+}
+
 async function enterZone(code: string, zoneId: string, participantId: string, sourceDeviceId?: string): Promise<JsonObject> {
   return injectJson("POST", `/sessions/${code}/zones/${zoneId}/presence`, {
     participantId,
@@ -337,6 +341,34 @@ test("exposes participant actions with availability reasons", async () => {
   assert.equal(sonarSweep.blockedBy.includes("role"), true);
 });
 
+test("tracks facilitator-controlled phase timing and turn cycles", async () => {
+  const session = await createSession("long-live-the-king-lite");
+  const code = session.code;
+
+  assert.equal(session.phase.id, "audience");
+  assert.equal(session.phaseClock.turn, 1);
+  assert.equal(session.phaseClock.phaseId, "audience");
+  assert.equal(session.phaseClock.phaseDurationSeconds, 180);
+  assert.equal(typeof session.phaseClock.phaseEndsAt, "string");
+  assert.equal(session.module.timeline.convergencePhaseId, "audience");
+
+  const customTimer = await setPhaseTimer(code, { durationSeconds: 600 });
+  assert.equal(customTimer.phaseClock.phaseId, "audience");
+  assert.equal(customTimer.phaseClock.phaseDurationSeconds, 600);
+  assert.equal(customTimer.phaseClock.facilitatorControlled, true);
+
+  const diplomacy = await advancePhase(code);
+  assert.equal(diplomacy.phase.id, "diplomacy");
+  assert.equal(diplomacy.phaseClock.turn, 1);
+  assert.equal(diplomacy.phaseClock.phaseDurationSeconds, 900);
+
+  await advancePhase(code);
+  await advancePhase(code);
+  const nextAudience = await advancePhase(code);
+  assert.equal(nextAudience.phase.id, "audience");
+  assert.equal(nextAudience.phaseClock.turn, 2);
+});
+
 test("transfers resources between participants and filters exchange read models", async () => {
   const session = await createSession();
   const code = session.code;
@@ -420,6 +452,69 @@ test("rejects invalid participant exchanges without partially applying resources
   assert.equal(dashboard.participants.find((candidate: JsonObject) => candidate.id === source.participant.id).resources.battery, 1);
   assert.equal(dashboard.participants.find((candidate: JsonObject) => candidate.id === target.participant.id).resources.battery, 0);
   assert.deepEqual(dashboard.exchanges, []);
+});
+
+test("opens pending petition resolutions from module mechanics", async () => {
+  const session = await createSession("long-live-the-king-lite");
+  const code = session.code;
+  const device = await createDevice(code, "Telephone reine");
+  const participant = await createParticipant(code, "Reine", "queen");
+  await bindDevice(code, device.device.id, participant.participant.id);
+  await advancePhase(code);
+  await advancePhase(code);
+
+  const petition = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/events`,
+    payload: {
+      type: "action.requested",
+      actionId: "submit-petition",
+      sourceDeviceId: device.device.id,
+      payload: { petitionText: "Demander une levee exceptionnelle" }
+    }
+  });
+
+  assert.equal(petition.statusCode, 202);
+  const body = petition.json<JsonObject>();
+  assert.equal(body.actionResult.effect.type, "pendingResolution");
+  assert.equal(body.actionResult.effect.mechanicId, "petition-vote");
+  assert.equal(body.actionResult.effect.mechanicFamily, "petition");
+  assert.equal(body.dashboard.pendingResolutions.length, 1);
+  assert.equal(body.dashboard.pendingResolutions[0].id, body.actionResult.effect.resolutionId);
+  assert.equal(body.dashboard.pendingResolutions[0].actionId, "submit-petition");
+  assert.equal(body.dashboard.pendingResolutions[0].payload.petitionText, "Demander une levee exceptionnelle");
+
+  const deviceModel = await injectJson("GET", `/sessions/${code}/read-models/device/${device.device.id}`);
+  assert.equal(deviceModel.pendingResolutions[0].mechanicId, "petition-vote");
+});
+
+test("opens pending contest resolutions from module mechanics", async () => {
+  const session = await createSession("putsch-lite");
+  const code = session.code;
+  const device = await createDevice(code, "Telephone general");
+  const participant = await createParticipant(code, "General", "general");
+  await bindDevice(code, device.device.id, participant.participant.id);
+  await advancePhase(code);
+  await advancePhase(code);
+
+  const coup = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/events`,
+    payload: {
+      type: "action.requested",
+      actionId: "attempt-coup",
+      sourceDeviceId: device.device.id,
+      payload: { defenderId: "pending-defender", leaderIds: ["leader-a", "leader-b"] }
+    }
+  });
+
+  assert.equal(coup.statusCode, 202);
+  const body = coup.json<JsonObject>();
+  assert.equal(body.actionResult.effect.type, "pendingResolution");
+  assert.equal(body.actionResult.effect.mechanicId, "contested-coup");
+  assert.equal(body.actionResult.effect.mechanicFamily, "contest");
+  assert.equal(body.dashboard.pendingResolutions[0].type, "contestedBid");
+  assert.equal(body.dashboard.pendingResolutions[0].resolution.type, "sealedCommitment");
 });
 
 test("maps participant presence to imaginary zones and applies zone effects", async () => {

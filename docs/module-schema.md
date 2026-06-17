@@ -7,6 +7,13 @@ This is the first conceptual schema for importable Thaumacord modules.
   "id": "string",
   "name": "string",
   "version": "string",
+  "timeline": {
+    "roundLabel": "Turn",
+    "turnCount": 7,
+    "durationPolicy": "facilitator-controlled",
+    "convergencePhaseId": "audience",
+    "decisionPhaseId": "council"
+  },
   "players": {
     "min": 3,
     "max": 12
@@ -92,6 +99,21 @@ This is the first conceptual schema for importable Thaumacord modules.
 }
 ```
 
+## Timeline
+
+`timeline` is loose timing metadata for table-time games. It can describe the round label, total turn count, facilitator timing policy, convergence phase, and decision phase.
+
+The server keeps an active `phaseClock` on each session:
+
+- `turn`;
+- `phaseId`;
+- `phaseStartedAt`;
+- `phaseDurationSeconds`;
+- `phaseEndsAt`;
+- `facilitatorControlled`.
+
+Default phase durations come from `phases[].durationSeconds`. A facilitator can override the current phase with `POST /sessions/:code/phases/timer`.
+
 ## Mechanics
 
 Mechanics describe reusable workflows that modules can create, vary, and bind to player-facing actions without hard-coding a specific game in the server.
@@ -128,6 +150,8 @@ Supported effects:
 - `setState`: writes a value to participant `statuses`;
 - `message`: stores a simple last message status;
 - `revealContactHint`: stores a contact hint status.
+
+If an action is bound to a workflow mechanism such as `petition`, `vote`, or `contest`, unsupported immediate effects can open a `pendingResolution` instead of being discarded. The resolution keeps the action, participant, payload, mechanic id, mechanic family, and module-declared resolution/visibility policy for later rule handling.
 
 Participant read models expose `availableActions` derived from module actions. Each item contains `id`, `name`, `phase`, optional `gesture`, optional `fallback`, optional `mechanicId`, `available`, and `blockedBy`.
 

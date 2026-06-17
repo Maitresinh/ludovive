@@ -84,6 +84,7 @@ const moduleSchema = z.object({
   version: z.string().min(1),
   pitch: z.string().optional(),
   inspirationNotes: z.string().optional(),
+  timeline: z.unknown().optional(),
   players: z.object({
     min: z.number().int().positive(),
     max: z.number().int().positive()
@@ -128,11 +129,27 @@ type AuditEntry = {
 type PendingResolution = {
   id: string;
   type: string;
-  participantId: string;
-  zoneId: string;
-  resourceId: string;
+  participantId?: string;
+  zoneId?: string;
+  resourceId?: string;
+  actionId?: string;
+  mechanicId?: string;
+  mechanicFamily?: string;
+  payload?: Record<string, unknown>;
+  resolution?: unknown;
+  visibility?: unknown;
   status: "pending";
   createdAt: string;
+};
+
+type PhaseClock = {
+  turn: number;
+  phaseId: string;
+  phaseIndex: number;
+  phaseStartedAt: string;
+  phaseDurationSeconds?: number;
+  phaseEndsAt?: string;
+  facilitatorControlled: boolean;
 };
 
 type Exchange = {
@@ -152,6 +169,7 @@ type Session = {
   code: string;
   moduleId: string;
   phaseIndex: number;
+  phaseClock: PhaseClock;
   devices: Device[];
   participants: Participant[];
   unlockedPhases: string[];
@@ -211,6 +229,14 @@ const assignRoleSchema = z.object({
 const setResourceSchema = z.object({
   resourceId: z.string().min(1),
   value: z.number().int()
+});
+
+const phaseTimerSchema = z.object({
+  durationSeconds: z.number().int().positive().optional(),
+  endsAt: z.string().datetime().optional(),
+  facilitatorControlled: z.boolean().default(true)
+}).refine((value) => value.durationSeconds !== undefined || value.endsAt !== undefined, {
+  message: "durationSeconds or endsAt is required"
 });
 
 const auditQuerySchema = z.object({
@@ -325,6 +351,36 @@ function getModuleOrThrow(moduleId: string): GameModule {
 
 function currentPhase(session: Session): z.infer<typeof phaseSchema> {
   return getModuleOrThrow(session.moduleId).phases[session.phaseIndex];
+}
+
+function phaseClock(module: GameModule, phaseIndex: number, turn: number, facilitatorControlled = false, durationSeconds?: number): PhaseClock {
+  const phase = module.phases[phaseIndex];
+  const startedAt = new Date();
+  const activeDurationSeconds = durationSeconds ?? phase.durationSeconds;
+  return {
+    turn,
+    phaseId: phase.id,
+    phaseIndex,
+    phaseStartedAt: startedAt.toISOString(),
+    phaseDurationSeconds: activeDurationSeconds,
+    phaseEndsAt: activeDurationSeconds ? new Date(startedAt.getTime() + activeDurationSeconds * 1000).toISOString() : undefined,
+    facilitatorControlled
+  };
+}
+
+function setPhaseTimer(session: Session, input: z.infer<typeof phaseTimerSchema>): PhaseClock {
+  const now = new Date();
+  const durationSeconds = input.durationSeconds ?? Math.max(1, Math.ceil((new Date(input.endsAt!).getTime() - now.getTime()) / 1000));
+  session.phaseClock = {
+    turn: session.phaseClock.turn,
+    phaseId: currentPhase(session).id,
+    phaseIndex: session.phaseIndex,
+    phaseStartedAt: now.toISOString(),
+    phaseDurationSeconds: durationSeconds,
+    phaseEndsAt: input.endsAt ?? new Date(now.getTime() + durationSeconds * 1000).toISOString(),
+    facilitatorControlled: input.facilitatorControlled
+  };
+  return session.phaseClock;
 }
 
 function audit(session: Session, type: string, payload: unknown): void {
@@ -501,6 +557,55 @@ function applyEffect(module: GameModule, participant: Participant, effect: Known
   return { type: effect.type, precision: effect.precision };
 }
 
+function effectType(effect: unknown, fallback: string): string {
+  return typeof effect === "object" && effect !== null && "type" in effect && typeof effect.type === "string" ? effect.type : fallback;
+}
+
+function opensPendingResolution(mechanic: GameModule["mechanics"][number]): boolean {
+  return ["petition", "vote", "contest", "facilitator-action", "triggered-ability", "information-action", "card-or-object"].includes(mechanic.family);
+}
+
+function createPendingActionResolution(
+  session: Session,
+  module: GameModule,
+  participant: Participant,
+  action: GameModule["actions"][number],
+  event: EventInput
+): Record<string, unknown> | undefined {
+  if (!action.mechanicId) {
+    return undefined;
+  }
+
+  const mechanic = module.mechanics.find((candidate) => candidate.id === action.mechanicId);
+  if (!mechanic || !opensPendingResolution(mechanic)) {
+    return undefined;
+  }
+
+  const pendingResolution: PendingResolution = {
+    id: crypto.randomUUID(),
+    type: effectType(action.effect, mechanic.family),
+    participantId: participant.id,
+    actionId: action.id,
+    mechanicId: mechanic.id,
+    mechanicFamily: mechanic.family,
+    payload: event.payload,
+    resolution: mechanic.resolution,
+    visibility: mechanic.visibility,
+    status: "pending",
+    createdAt: new Date().toISOString()
+  };
+  session.pendingResolutions.push(pendingResolution);
+
+  return {
+    type: "pendingResolution",
+    resolutionId: pendingResolution.id,
+    mechanicId: mechanic.id,
+    mechanicFamily: mechanic.family,
+    actionEffectType: pendingResolution.type,
+    status: pendingResolution.status
+  };
+}
+
 function applyZoneEffect(session: Session, participant: Participant, zoneId: string, effect: KnownZoneEffect): Record<string, unknown> {
   if (effect.type === "unlockPhase") {
     if (!session.unlockedPhases.includes(effect.phase)) {
@@ -628,7 +733,9 @@ function applyActionEvent(session: Session, event: EventInput): Record<string, u
 
   const appliedCosts = Object.entries(action.cost ?? {}).map(([resourceId, cost]) => adjustResource(module, participant, resourceId, -cost));
   const parsedEffect = knownEffectSchema.safeParse(action.effect);
-  const appliedEffect = parsedEffect.success ? applyEffect(module, participant, parsedEffect.data, event) : { type: "unsupported", effect: action.effect };
+  const appliedEffect = parsedEffect.success
+    ? applyEffect(module, participant, parsedEffect.data, event)
+    : createPendingActionResolution(session, module, participant, action, event) ?? { type: "unsupported", effect: action.effect };
 
   return {
     actionId,
@@ -1015,6 +1122,7 @@ app.post("/sessions", async (request, reply) => {
     code,
     moduleId: module.id,
     phaseIndex: 0,
+    phaseClock: phaseClock(module, 0, 1),
     devices: [],
     participants: [],
     unlockedPhases: [module.phases[0].id],
@@ -1345,9 +1453,26 @@ app.post("/sessions/:code/phases/advance", async (request, reply) => {
   }
 
   const module = getModuleOrThrow(session.moduleId);
-  session.phaseIndex = (session.phaseIndex + 1) % module.phases.length;
-  audit(session, "phase.changed", { phaseId: currentPhase(session).id, phaseIndex: session.phaseIndex });
-  broadcast(session, "phase.changed", { phaseId: currentPhase(session).id, phaseIndex: session.phaseIndex });
+  const nextPhaseIndex = (session.phaseIndex + 1) % module.phases.length;
+  const nextTurn = nextPhaseIndex === 0 ? session.phaseClock.turn + 1 : session.phaseClock.turn;
+  session.phaseIndex = nextPhaseIndex;
+  session.phaseClock = phaseClock(module, session.phaseIndex, nextTurn);
+  audit(session, "phase.changed", { phaseId: currentPhase(session).id, phaseIndex: session.phaseIndex, phaseClock: session.phaseClock });
+  broadcast(session, "phase.changed", { phaseId: currentPhase(session).id, phaseIndex: session.phaseIndex, phaseClock: session.phaseClock });
+  return visibleSession(session);
+});
+
+app.post("/sessions/:code/phases/timer", async (request, reply) => {
+  const { code } = request.params as { code: string };
+  const session = getSession(code);
+  if (!session) {
+    return reply.code(404).send({ error: "Session not found" });
+  }
+
+  const input = phaseTimerSchema.parse(request.body);
+  const clock = setPhaseTimer(session, input);
+  audit(session, "phase.timer_set", { phaseClock: clock });
+  broadcast(session, "phase.timer_set", { phaseClock: clock });
   return visibleSession(session);
 });
 

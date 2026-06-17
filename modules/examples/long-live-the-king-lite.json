@@ -2,6 +2,14 @@
   "id": "long-live-the-king-lite",
   "name": "Long Live the King Lite",
   "version": "0.1.0",
+  "timeline": {
+    "roundLabel": "Tour",
+    "turnCount": 7,
+    "durationPolicy": "facilitator-controlled",
+    "convergencePhaseId": "audience",
+    "decisionPhaseId": "council",
+    "notes": "La diplomatie, les cartes, les faveurs et les petitions convergent vers l'audience du roi et la sequence de conseil."
+  },
   "players": {
     "min": 4,
     "max": 7
