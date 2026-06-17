@@ -1007,7 +1007,12 @@ function minimalReadModel(session: Session): Record<string, unknown> {
     readModel: "device.unbound",
     module: {
       id: module.id,
-      name: module.name
+      name: module.name,
+      resources: module.resources.map((resource) => ({
+        id: resource.id,
+        name: resource.name,
+        visibility: resource.visibility
+      }))
     },
     phase: currentPhase(session),
     devices: session.devices.map((device) => ({
@@ -1178,7 +1183,12 @@ function participantReadModel(session: Session, participantId: string): Record<s
     code: session.code,
     module: {
       id: module.id,
-      name: module.name
+      name: module.name,
+      resources: module.resources.map((resource) => ({
+        id: resource.id,
+        name: resource.name,
+        visibility: resource.visibility
+      }))
     },
     phase: currentPhase(session),
     participant,
@@ -1688,6 +1698,9 @@ function renderParticipantApp(): string {
         if (data.readModel) render(data.readModel);
       });
     }
+    function resourceLabel(model, resourceId) {
+      return model.module.resources.find((resource) => resource.id === resourceId)?.name || resourceId;
+    }
     function render(model) {
       byId("state").textContent = JSON.stringify(model, null, 2);
       if (model.readModel === "device.unbound") {
@@ -1703,14 +1716,14 @@ function renderParticipantApp(): string {
         '<span class="pill">Phase ' + model.phase.name + '</span>',
         '<span class="pill">' + (model.participant.roleId || "role a attribuer") + '</span>'
       ].join(" ");
-      byId("resources").innerHTML = Object.entries(model.participant.resources || {}).map(([key, value]) => '<div class="item"><strong>' + key + '</strong><div>' + value + '</div></div>').join("") || '<div class="muted">Aucune ressource</div>';
+      byId("resources").innerHTML = Object.entries(model.participant.resources || {}).map(([key, value]) => '<div class="item"><strong>' + resourceLabel(model, key) + '</strong><div>' + value + '</div></div>').join("") || '<div class="muted">Aucune ressource</div>';
       const otherParticipants = (model.visibleParticipants || []).filter((participant) => participant.id !== model.participant.id);
       byId("exchangeTo").innerHTML = otherParticipants.map((participant) => option(participant.id, participant.name + (participant.roleId ? " (" + participant.roleId + ")" : ""))).join("");
-      byId("exchangeResource").innerHTML = Object.keys(model.participant.resources || {}).map((resourceId) => option(resourceId, resourceId)).join("");
+      byId("exchangeResource").innerHTML = Object.keys(model.participant.resources || {}).map((resourceId) => option(resourceId, resourceLabel(model, resourceId))).join("");
       byId("sendExchange").disabled = otherParticipants.length === 0;
       byId("exchanges").innerHTML = (model.exchanges || []).slice(-5).map((exchange) => {
         const direction = exchange.fromParticipantId === model.participant.id ? "envoye" : "recu";
-        const resources = Object.entries(exchange.resources).map(([key, value]) => key + ": " + value).join(" / ");
+        const resources = Object.entries(exchange.resources).map(([key, value]) => resourceLabel(model, key) + ": " + value).join(" / ");
         return '<div class="item"><strong>' + direction + '</strong><div>' + resources + '</div></div>';
       }).join("") || '<div class="muted">Aucun echange</div>';
       byId("messages").innerHTML = (model.messages || []).slice(-5).map((message) => '<div class="item"><strong>' + message.channel + '</strong><div>' + message.text + '</div></div>').join("") || '<div class="muted">Aucun message</div>';
