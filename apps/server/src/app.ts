@@ -195,6 +195,16 @@ type ComponentPool = {
   exhausted: boolean;
 };
 
+type SessionMessage = {
+  id: string;
+  target: "allParticipants" | "participant" | "dashboard";
+  participantId?: string;
+  text: string;
+  channel: string;
+  status: "sent";
+  createdAt: string;
+};
+
 type Audience =
   | { kind: "dashboard" }
   | { kind: "device"; deviceId?: string };
@@ -211,6 +221,7 @@ type Session = {
   componentPools: Record<string, ComponentPool>;
   pendingResolutions: PendingResolution[];
   exchanges: Exchange[];
+  messages: SessionMessage[];
   nextAuditSequence: number;
   audit: AuditEntry[];
 };
@@ -297,6 +308,13 @@ const drawComponentSchema = z.object({
   componentId: z.string().min(1),
   count: z.number().int().positive(),
   reason: z.string().min(1).optional()
+});
+
+const sessionMessageSchema = z.object({
+  target: z.enum(["allParticipants", "participant", "dashboard"]),
+  participantId: z.string().min(1).optional(),
+  text: z.string().min(1).max(2000),
+  channel: z.string().min(1).default("facilitator")
 });
 
 const eventSchema = z.object({
@@ -602,6 +620,31 @@ function createExchange(session: Session, fromParticipantId: string, toParticipa
     exchange,
     transfers
   };
+}
+
+function visibleMessagesForParticipant(session: Session, participantId: string): SessionMessage[] {
+  return session.messages.filter((message) => message.target === "allParticipants" || message.participantId === participantId);
+}
+
+function createSessionMessage(session: Session, input: z.infer<typeof sessionMessageSchema>): SessionMessage {
+  if (input.target === "participant" && !input.participantId) {
+    throw new Error("participantId is required for participant messages");
+  }
+  if (input.participantId && !participantExists(session, input.participantId)) {
+    throw new Error("Unknown participant");
+  }
+
+  const message: SessionMessage = {
+    id: crypto.randomUUID(),
+    target: input.target,
+    participantId: input.participantId,
+    text: input.text,
+    channel: input.channel,
+    status: "sent",
+    createdAt: new Date().toISOString()
+  };
+  session.messages.push(message);
+  return message;
 }
 
 function runSetupDistribution(session: Session): Record<string, unknown> {
@@ -1095,6 +1138,7 @@ function dashboardReadModel(session: Session): ReturnType<typeof visibleSession>
   return {
     ...visibleSession(session),
     aggregates: aggregateSession(session),
+    messages: session.messages,
     readModel: "dashboard"
   };
 }
@@ -1117,6 +1161,7 @@ function participantReadModel(session: Session, participantId: string): Record<s
     availableActions: actionAvailability(session, participant),
     pendingResolutions: session.pendingResolutions.filter((resolution) => resolution.participantId === participant.id),
     exchanges: session.exchanges.filter((exchange) => exchange.fromParticipantId === participant.id || exchange.toParticipantId === participant.id),
+    messages: visibleMessagesForParticipant(session, participant.id),
     visibleParticipants: session.participants.map((candidate) => ({
       id: candidate.id,
       kind: candidate.kind,
@@ -1350,6 +1395,7 @@ app.post("/sessions", async (request, reply) => {
     componentPools: defaultComponentPools(module),
     pendingResolutions: [],
     exchanges: [],
+    messages: [],
     nextAuditSequence: 1,
     audit: []
   };
@@ -1558,6 +1604,30 @@ app.get("/sessions/:code/devices/:deviceId/sync", async (request, reply) => {
     readModel: readModelForAudience(session, { kind: "device", deviceId }),
     audit: auditCatchUp(session, query.after, query.limit)
   };
+});
+
+app.post("/sessions/:code/messages", async (request, reply) => {
+  const { code } = request.params as { code: string };
+  const session = getSession(code);
+  if (!session) {
+    return reply.code(404).send({ error: "Session not found" });
+  }
+
+  const input = sessionMessageSchema.parse(request.body);
+  let message: SessionMessage;
+  try {
+    message = createSessionMessage(session, input);
+  } catch (error) {
+    return reply.code(400).send({ error: error instanceof Error ? error.message : "Message rejected" });
+  }
+
+  audit(session, "message.sent", { message });
+  broadcast(session, "message.sent", session.audit.at(-1));
+  return reply.code(202).send({
+    accepted: true,
+    message,
+    dashboard: dashboardReadModel(session)
+  });
 });
 
 app.post("/sessions/:code/setup/distribute", async (request, reply) => {

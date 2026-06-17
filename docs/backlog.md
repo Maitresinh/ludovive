@@ -64,6 +64,7 @@ Acceptance criteria:
 
 - The dashboard receives all state allowed by the module.
 - It shows devices, participants, resources, statuses, locations, events, and audit.
+- It can send structured messages or prompts to one participant, all participants, or dashboard-only channels.
 - Manual corrections are logged.
 - It is implemented as a projection of the transmission core, not as a special case.
 

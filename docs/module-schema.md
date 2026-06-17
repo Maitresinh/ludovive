@@ -237,6 +237,27 @@ Dashboard read models include `aggregates` for facilitator analysis and economic
 
 Participant-bound read models do not expose these global aggregates.
 
+## Facilitator Messages
+
+`POST /sessions/:code/messages` lets a dashboard or facilitator surface send structured messages:
+
+```json
+{
+  "target": "participant",
+  "participantId": "participant-id",
+  "text": "Le roi vous convoque en prive.",
+  "channel": "audience"
+}
+```
+
+Targets:
+
+- `participant`: visible only to the target participant and dashboard;
+- `allParticipants`: visible to all participant-bound read models and dashboard;
+- `dashboard`: visible only to dashboard.
+
+Messages are audited as `message.sent` and broadcast through live read models.
+
 ## Supported Zone Effects In Prototype
 
 `POST /sessions/:code/zones/:zoneId/presence` moves a participant to a module zone and applies supported zone effects.

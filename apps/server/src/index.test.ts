@@ -70,6 +70,10 @@ async function drawComponent(code: string, payload: JsonObject): Promise<JsonObj
   return injectJson("POST", `/sessions/${code}/components/draw`, payload);
 }
 
+async function sendMessage(code: string, payload: JsonObject): Promise<JsonObject> {
+  return injectJson("POST", `/sessions/${code}/messages`, payload);
+}
+
 function collectLiveMessages(url: string, expectedCount = 2): Promise<{ socket: WebSocket; messages: JsonObject[] }> {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(url);
@@ -386,6 +390,72 @@ test("tracks facilitator-controlled phase timing and turn cycles", async () => {
   const nextSetup = await advancePhase(code);
   assert.equal(nextSetup.phase.id, "setup");
   assert.equal(nextSetup.phaseClock.turn, 2);
+});
+
+test("sends facilitator messages with participant-filtered visibility", async () => {
+  const session = await createSession("long-live-the-king-lite");
+  const code = session.code;
+  const queenDevice = await createDevice(code, "Telephone reine");
+  const baronDevice = await createDevice(code, "Telephone baron");
+  const queen = await createParticipant(code, "Reine", "queen");
+  const baron = await createParticipant(code, "Baron", "baron");
+  await bindDevice(code, queenDevice.device.id, queen.participant.id);
+  await bindDevice(code, baronDevice.device.id, baron.participant.id);
+
+  const privateMessage = await sendMessage(code, {
+    target: "participant",
+    participantId: queen.participant.id,
+    text: "Le roi vous convoque en prive.",
+    channel: "audience"
+  });
+  const publicMessage = await sendMessage(code, {
+    target: "allParticipants",
+    text: "Le conseil commence.",
+    channel: "announcement"
+  });
+
+  assert.equal(privateMessage.accepted, true);
+  assert.equal(publicMessage.accepted, true);
+  assert.equal(publicMessage.dashboard.messages.length, 2);
+
+  const queenModel = await injectJson("GET", `/sessions/${code}/read-models/device/${queenDevice.device.id}`);
+  const baronModel = await injectJson("GET", `/sessions/${code}/read-models/device/${baronDevice.device.id}`);
+  assert.deepEqual(
+    queenModel.messages.map((message: JsonObject) => message.text),
+    ["Le roi vous convoque en prive.", "Le conseil commence."]
+  );
+  assert.deepEqual(
+    baronModel.messages.map((message: JsonObject) => message.text),
+    ["Le conseil commence."]
+  );
+});
+
+test("rejects malformed facilitator messages", async () => {
+  const session = await createSession();
+  const code = session.code;
+
+  const missingParticipant = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/messages`,
+    payload: {
+      target: "participant",
+      text: "Message sans cible."
+    }
+  });
+  assert.equal(missingParticipant.statusCode, 400);
+  assert.equal(missingParticipant.json<JsonObject>().error, "participantId is required for participant messages");
+
+  const unknownParticipant = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/messages`,
+    payload: {
+      target: "participant",
+      participantId: "missing-participant",
+      text: "Message vers inconnu."
+    }
+  });
+  assert.equal(unknownParticipant.statusCode, 400);
+  assert.equal(unknownParticipant.json<JsonObject>().error, "Unknown participant");
 });
 
 test("runs module setup distributions into participant inventories", async () => {
