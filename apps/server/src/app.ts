@@ -1708,6 +1708,18 @@ function renderIndex(): string {
     function dashboardResourceOptions(session) {
       return session.module.resources.map((resource) => option(resource.id, resource.name)).join("");
     }
+    function dashboardResolutionEffectLabel(session, effect) {
+      if (!effect) return "";
+      const target = effect.participantId ? (session.participants.find((participant) => participant.id === effect.participantId)?.name || effect.participantId) + " - " : "";
+      if (effect.type === "adjustResource") return target + dashboardResourceLabel(session, effect.resource) + " " + (effect.delta > 0 ? "+" : "") + effect.delta;
+      if (effect.type === "setState") return target + effect.state + " = " + (effect.value === undefined ? "true" : effect.value);
+      return target + effect.type;
+    }
+    function dashboardOutcomeDetails(session, outcome) {
+      const effects = (outcome.effects || []).map((effect) => dashboardResolutionEffectLabel(session, effect)).filter(Boolean);
+      if (!outcome.description && effects.length === 0) return "";
+      return '<div class="muted" data-resolution-outcome-detail="' + outcome.id + '">' + [outcome.description, effects.length ? "Effets: " + effects.join(" / ") : ""].filter(Boolean).join(" - ") + '</div>';
+    }
     function formatClock(clock) {
       if (!clock) return "sans minuteur";
       const end = clock.phaseEndsAt ? new Date(clock.phaseEndsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "fin libre";
@@ -1792,8 +1804,10 @@ function renderIndex(): string {
       byId("pendingResolutions").innerHTML = (session.pendingResolutions || []).map((resolution) => {
         const participant = session.participants.find((candidate) => candidate.id === resolution.participantId);
         const payload = resolution.payload ? JSON.stringify(resolution.payload) : "";
-        const outcomes = (resolution.recommendedOutcomes || [{ id: "facilitator-resolved", label: "Marquer resolue" }]).map((outcome) => '<button class="secondary resolveResolution" data-resolution-id="' + resolution.id + '" data-outcome="' + outcome.id + '">' + outcome.label + '</button>').join("");
-        return '<div class="item"><strong>' + resolution.type + '</strong><div>' + (resolution.summary || (participant ? participant.name : "table")) + '</div><div class="muted">' + (resolution.mechanicId || resolution.mechanicFamily || "sans mecanique") + '</div><div class="muted">' + payload + '</div><label>Note MJ</label><input data-resolution-note placeholder="Note optionnelle" /><div class="row"><div><label>Cible effet</label><select data-resolution-effect-participant>' + dashboardParticipantOptions(session) + '</select></div><div><label>Ressource</label><select data-resolution-resource>' + dashboardResourceOptions(session) + '</select></div></div><label>Delta ressource</label><input type="number" value="0" data-resolution-resource-delta /><div class="row"><div><label>Statut</label><input data-resolution-state placeholder="ex: coupOutcome" /></div><div><label>Valeur</label><input data-resolution-state-value placeholder="ex: attacker-wins" /></div></div><div class="actions">' + outcomes + '</div></div>';
+        const outcomeList = resolution.recommendedOutcomes || [{ id: "facilitator-resolved", label: "Marquer resolue" }];
+        const outcomes = outcomeList.map((outcome) => '<button class="secondary resolveResolution" data-resolution-id="' + resolution.id + '" data-outcome="' + outcome.id + '">' + outcome.label + '</button>').join("");
+        const outcomeDetails = outcomeList.map((outcome) => dashboardOutcomeDetails(session, outcome)).join("");
+        return '<div class="item"><strong>' + resolution.type + '</strong><div>' + (resolution.summary || (participant ? participant.name : "table")) + '</div><div class="muted">' + (resolution.mechanicId || resolution.mechanicFamily || "sans mecanique") + '</div><div class="muted">' + payload + '</div>' + outcomeDetails + '<label>Note MJ</label><input data-resolution-note placeholder="Note optionnelle" /><div class="row"><div><label>Cible effet</label><select data-resolution-effect-participant>' + dashboardParticipantOptions(session) + '</select></div><div><label>Ressource</label><select data-resolution-resource>' + dashboardResourceOptions(session) + '</select></div></div><label>Delta ressource</label><input type="number" value="0" data-resolution-resource-delta /><div class="row"><div><label>Statut</label><input data-resolution-state placeholder="ex: coupOutcome" /></div><div><label>Valeur</label><input data-resolution-state-value placeholder="ex: attacker-wins" /></div></div><div class="actions">' + outcomes + '</div></div>';
       }).join("") || '<div class="muted">Aucune resolution en attente</div>';
       byId("audit").textContent = JSON.stringify((session.audit || []).slice(-12), null, 2);
       byId("state").textContent = JSON.stringify(session, null, 2);
