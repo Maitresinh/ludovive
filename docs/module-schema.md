@@ -201,7 +201,9 @@ Supported effects:
 
 If an action is bound to a workflow mechanism such as `petition`, `vote`, or `contest`, unsupported immediate effects can open a `pendingResolution` instead of being discarded. The resolution keeps the action, participant, payload, mechanic id, mechanic family, and module-declared resolution/visibility policy for later rule handling.
 
-Participant read models expose `availableActions` derived from module actions. Each item contains `id`, `name`, `phase`, optional `gesture`, optional `fallback`, optional `mechanicId`, `available`, and `blockedBy`.
+Participant read models expose `availableActions` derived from module actions. Each item contains `id`, `name`, `phase`, optional `gesture`, optional `fallback`, optional `mechanicId`, optional `inputs`, `available`, and `blockedBy`.
+
+When an action references a mechanic, `inputs` mirrors the mechanic inputs that a client must ask the participant to provide. Inputs with `source: "actor-or-bound-device"` are omitted because the server can infer them from the bound phone. The prototype participant app currently renders simple controls for `text`, `participant`, `participant-list`, `enum`, and `resource-bundle`.
 
 Gesture events can omit `actionId` when the module action has a matching `gesture`. The server only resolves the gesture if the action is currently available for the participant.
 

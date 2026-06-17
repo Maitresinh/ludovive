@@ -137,6 +137,9 @@ test("serves a mobile participant app for session join", async () => {
   assert.match(response.body, /Entrer dans la partie/);
   assert.match(response.body, /Transferer/);
   assert.match(response.body, /Declencher/);
+  assert.match(response.body, /actionInputControl/);
+  assert.match(response.body, /collectActionPayload/);
+  assert.match(response.body, /data-action-input/);
   assert.match(response.body, /Afficher debug/);
   assert.match(response.body, /id="debugPanel" class="hidden"/);
 });
@@ -443,6 +446,28 @@ test("exposes participant actions with availability reasons", async () => {
   assert.equal(quietRunning.mechanicId, "station-action");
   assert.equal(sonarSweep.available, false);
   assert.equal(sonarSweep.blockedBy.includes("role"), true);
+});
+
+test("exposes mechanic inputs on participant action read models", async () => {
+  const session = await createSession("putsch-lite");
+  const code = session.code;
+  const joined = await injectJson("POST", `/sessions/${code}/join`, {
+    name: "Ana",
+    roleId: "general"
+  });
+
+  await advancePhase(code);
+  await advancePhase(code);
+  const model = await injectJson("GET", `/sessions/${code}/read-models/device/${joined.device.id}`);
+  const coup = model.availableActions.find((action: JsonObject) => action.id === "attempt-coup");
+
+  assert.equal(coup.available, true);
+  assert.deepEqual(
+    coup.inputs.map((input: JsonObject) => input.id),
+    ["defenderId", "leaderIds", "resources"]
+  );
+  assert.equal(coup.inputs.find((input: JsonObject) => input.id === "leaderIds").count, 2);
+  assert.deepEqual(coup.inputs.find((input: JsonObject) => input.id === "resources").allowed, ["weapons", "ammo", "influence"]);
 });
 
 test("tracks facilitator-controlled phase timing and turn cycles", async () => {

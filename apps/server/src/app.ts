@@ -233,6 +233,7 @@ type ActionAvailability = {
   gesture?: string;
   fallback?: string;
   mechanicId?: string;
+  inputs?: unknown[];
   available: boolean;
   blockedBy: string[];
 };
@@ -987,6 +988,11 @@ function actionAvailability(session: Session, participant: Participant): ActionA
   const module = getModuleOrThrow(session.moduleId);
   return module.actions.map((action) => {
     const blockedBy = actionBlockedBy(session, participant, action);
+    const mechanic = module.mechanics.find((candidate) => candidate.id === action.mechanicId);
+    const inputs = (mechanic?.inputs ?? []).filter((input) => {
+      if (typeof input !== "object" || input === null) return true;
+      return (input as Record<string, unknown>).source !== "actor-or-bound-device";
+    });
     return {
       id: action.id,
       name: action.name,
@@ -994,6 +1000,7 @@ function actionAvailability(session: Session, participant: Participant): ActionA
       gesture: action.gesture,
       fallback: action.fallback,
       mechanicId: action.mechanicId,
+      inputs,
       available: blockedBy.length === 0,
       blockedBy
     };
@@ -1778,6 +1785,66 @@ function renderParticipantApp(): string {
       const end = clock.phaseEndsAt ? new Date(clock.phaseEndsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "fin libre";
       return "Tour " + clock.turn + " - " + (clock.phaseDurationSeconds || "sans duree") + "s - fin " + end;
     }
+    function actionInputLabel(input) {
+      return input.label || input.name || input.id;
+    }
+    function participantOptions(model, includeSelf) {
+      return (model.visibleParticipants || [])
+        .filter((participant) => includeSelf || participant.id !== model.participant.id)
+        .map((participant) => option(participant.id, participant.name + (participant.roleId ? " (" + roleLabel(model, participant.roleId) + ")" : "")))
+        .join("");
+    }
+    function actionInputControl(model, input) {
+      if (!input || !input.id) return "";
+      const label = actionInputLabel(input);
+      if (input.type === "text") {
+        return '<label>' + label + '</label><input data-action-input="' + input.id + '" placeholder="' + label + '" />';
+      }
+      if (input.type === "participant") {
+        return '<label>' + label + '</label><select data-action-input="' + input.id + '">' + participantOptions(model, false) + '</select>';
+      }
+      if (input.type === "participant-list") {
+        const count = Number(input.count || 2);
+        return Array.from({ length: count }, (_, index) => '<label>' + label + ' ' + (index + 1) + '</label><select data-action-input="' + input.id + '" data-list-index="' + index + '">' + participantOptions(model, true) + '</select>').join("");
+      }
+      if (input.type === "enum") {
+        return '<label>' + label + '</label><select data-action-input="' + input.id + '">' + (input.choices || []).map((choice) => option(choice, choice)).join("") + '</select>';
+      }
+      if (input.type === "resource-bundle") {
+        const resources = input.allowed || Object.keys(model.participant.resources || {});
+        return '<div class="stack">' + resources.map((resourceId) => '<label>' + resourceLabel(model, resourceId) + '</label><input type="number" min="0" value="0" data-action-input="' + input.id + '" data-resource-id="' + resourceId + '" />').join("") + '</div>';
+      }
+      return '<label>' + label + '</label><input data-action-input="' + input.id + '" placeholder="' + label + '" />';
+    }
+    function actionForm(model, action) {
+      const inputs = action.inputs || [];
+      if (!inputs.length) return "";
+      return '<div class="actionInputs">' + inputs.map((input) => actionInputControl(model, input)).join("") + '</div>';
+    }
+    function collectActionPayload(card) {
+      const payload = {};
+      card.querySelectorAll("[data-action-input]").forEach((field) => {
+        const key = field.dataset.actionInput;
+        if (!key) return;
+        if (field.dataset.resourceId) {
+          const value = Number(field.value);
+          if (value > 0) {
+            const bundle = payload[key] && typeof payload[key] === "object" && !Array.isArray(payload[key]) ? payload[key] : {};
+            bundle[field.dataset.resourceId] = value;
+            payload[key] = bundle;
+          }
+          return;
+        }
+        if (field.dataset.listIndex !== undefined) {
+          const list = Array.isArray(payload[key]) ? payload[key] : [];
+          if (field.value) list[Number(field.dataset.listIndex)] = field.value;
+          payload[key] = list.filter(Boolean);
+          return;
+        }
+        if (field.value) payload[key] = field.value;
+      });
+      return payload;
+    }
     function render(model) {
       byId("state").textContent = JSON.stringify(model, null, 2);
       if (model.readModel === "device.unbound") {
@@ -1805,7 +1872,7 @@ function renderParticipantApp(): string {
         return '<div class="item"><strong>' + direction + '</strong><div>' + resources + '</div></div>';
       }).join("") || '<div class="muted">Aucun echange</div>';
       byId("messages").innerHTML = (model.messages || []).slice(-5).map((message) => '<div class="item"><strong>' + message.channel + '</strong><div>' + message.text + '</div></div>').join("") || '<div class="muted">Aucun message</div>';
-      byId("actions").innerHTML = (model.availableActions || []).filter((action) => action.available).map((action) => '<div class="item"><strong>' + action.name + '</strong><div class="muted">' + (action.fallback || action.id) + '</div><button class="secondary actionButton" data-action-id="' + action.id + '">Declencher</button></div>').join("") || '<div class="muted">Aucune action disponible</div>';
+      byId("actions").innerHTML = (model.availableActions || []).filter((action) => action.available).map((action) => '<div class="item"><strong>' + action.name + '</strong><div class="muted">' + (action.fallback || action.id) + '</div>' + actionForm(model, action) + '<button class="secondary actionButton" data-action-id="' + action.id + '">Declencher</button></div>').join("") || '<div class="muted">Aucune action disponible</div>';
     }
     byId("loadSession").addEventListener("click", () => run(loadSession));
     byId("join").addEventListener("click", () => run(async () => {
@@ -1832,11 +1899,12 @@ function renderParticipantApp(): string {
     byId("actions").addEventListener("click", (event) => run(async () => {
       const button = event.target.closest(".actionButton");
       if (!button) return;
+      const card = button.closest(".item");
       await api("/sessions/" + sessionCode + "/events", { method: "POST", body: JSON.stringify({
         type: "action.triggered",
         sourceDeviceId: deviceId,
         actionId: button.dataset.actionId,
-        payload: {}
+        payload: collectActionPayload(card)
       }) });
       await refreshDevice();
     }));
