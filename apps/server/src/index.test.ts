@@ -192,6 +192,42 @@ test("lets the facilitator assign a role after participant join", async () => {
   assert.equal(participantSync.audit.entries.at(-1).type, "role.assigned");
 });
 
+test("assigns session roles separately from in-game roles", async () => {
+  const putschSession = await createSession("putsch-lite");
+  const putschCode = putschSession.code;
+  const director = await createParticipant(putschCode, "Paquito", "facilitator-capitalist");
+
+  assert.equal(putschSession.sessionRoleAssignments.host.enabled, true);
+  assert.equal(putschSession.sessionRoleAssignments["game-authority"].enabled, false);
+
+  const assignedAuthority = await injectJson("POST", `/sessions/${putschCode}/session-roles/game-authority`, {
+    participantId: director.participant.id
+  });
+
+  assert.equal(assignedAuthority.sessionRoleAssignments["game-authority"].participantId, director.participant.id);
+  assert.equal(assignedAuthority.sessionRoleAssignments["game-authority"].enabled, true);
+  assert.equal(assignedAuthority.audit.at(-1).type, "session_role.assigned");
+
+  const wolfpackSession = await createSession("wolfpack-lite");
+  const wolfpackCode = wolfpackSession.code;
+  const sonar = await createParticipant(wolfpackCode, "Sonar", "sonar");
+  const captain = await createParticipant(wolfpackCode, "Capitaine", "captain");
+
+  const rejected = await app.inject({
+    method: "POST",
+    url: `/sessions/${wolfpackCode}/session-roles/host`,
+    payload: { participantId: sonar.participant.id }
+  });
+  assert.equal(rejected.statusCode, 400);
+  assert.match(rejected.json<JsonObject>().error, /not assignable/);
+
+  const assignedHost = await injectJson("POST", `/sessions/${wolfpackCode}/session-roles/host`, {
+    participantId: captain.participant.id
+  });
+  assert.equal(assignedHost.sessionRoleAssignments.host.participantId, captain.participant.id);
+  assert.equal(assignedHost.sessionRoleAssignments.host.enabled, true);
+});
+
 test("sends facilitator phase timers to participant read models", async () => {
   const session = await createSession("putsch-lite");
   const code = session.code;

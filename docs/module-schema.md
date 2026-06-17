@@ -157,6 +157,21 @@ This is the first conceptual schema for importable Thaumacord modules.
 - `canInjectGameElements` tells the app whether this session role can introduce or modify game state beyond ordinary participant actions.
 - `assignableToRoles` links the session role to in-game roles when needed. In Putsch, the host and the director/MJ authority can be combined or separated. In the submarine module, the host can simply be the captain and does not need injection authority.
 
+Each session stores `sessionRoleAssignments` separately from participants' in-game `roleId`. Optional session roles start disabled; required session roles start enabled but unassigned. The prototype supports:
+
+```http
+POST /sessions/:code/session-roles/:sessionRoleId
+```
+
+```json
+{
+  "participantId": "participant-id",
+  "enabled": true
+}
+```
+
+The server validates that the session role exists, that the participant exists when supplied, and that `assignableToRoles` allows the participant's current in-game role.
+
 The server keeps an active `phaseClock` on each session:
 
 - `turn`;

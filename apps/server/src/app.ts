@@ -218,6 +218,13 @@ type ComponentPool = {
   exhausted: boolean;
 };
 
+type SessionRoleAssignment = {
+  sessionRoleId: string;
+  participantId?: string;
+  enabled: boolean;
+  assignedAt: string;
+};
+
 type SessionMessage = {
   id: string;
   target: "allParticipants" | "participant" | "dashboard";
@@ -242,6 +249,7 @@ type Session = {
   unlockedPhases: string[];
   risks: Record<string, number>;
   statuses: Record<string, unknown>;
+  sessionRoleAssignments: Record<string, SessionRoleAssignment>;
   componentPools: Record<string, ComponentPool>;
   pendingResolutions: PendingResolution[];
   exchanges: Exchange[];
@@ -296,6 +304,11 @@ const createParticipantSchema = z.object({
 
 const assignRoleSchema = z.object({
   roleId: z.string().min(1)
+});
+
+const assignSessionRoleSchema = z.object({
+  participantId: z.string().min(1).optional(),
+  enabled: z.boolean().default(true)
 });
 
 const setResourceSchema = z.object({
@@ -1314,6 +1327,7 @@ function minimalReadModel(session: Session): Record<string, unknown> {
       })),
       sessionRoles: module.sessionRoles
     },
+    sessionRoleAssignments: session.sessionRoleAssignments,
     phase: currentPhase(session),
     phaseClock: session.phaseClock,
     devices: session.devices.map((device) => ({
@@ -1400,6 +1414,38 @@ function defaultComponentPools(module: GameModule): Record<string, ComponentPool
       }
     ])
   );
+}
+
+function defaultSessionRoleAssignments(module: GameModule): Record<string, SessionRoleAssignment> {
+  return Object.fromEntries(
+    module.sessionRoles.map((sessionRole) => [
+      sessionRole.id,
+      {
+        sessionRoleId: sessionRole.id,
+        enabled: !sessionRole.optional,
+        assignedAt: new Date().toISOString()
+      }
+    ])
+  );
+}
+
+function assertSessionRoleAssignment(module: GameModule, session: Session, sessionRoleId: string, participantId?: string): z.infer<typeof sessionRoleSchema> {
+  const sessionRole = module.sessionRoles.find((candidate) => candidate.id === sessionRoleId);
+  if (!sessionRole) {
+    throw new Error("Unknown session role");
+  }
+  if (!participantId) {
+    return sessionRole;
+  }
+
+  const participant = session.participants.find((candidate) => candidate.id === participantId);
+  if (!participant) {
+    throw new Error("Participant not found");
+  }
+  if (sessionRole.assignableToRoles.length > 0 && (!participant.roleId || !sessionRole.assignableToRoles.includes(participant.roleId))) {
+    throw new Error(`Session role ${sessionRoleId} is not assignable to participant role ${participant.roleId ?? "none"}`);
+  }
+  return sessionRole;
 }
 
 function incrementCount(target: Record<string, number>, key: string | undefined): void {
@@ -1559,6 +1605,7 @@ function participantReadModel(session: Session, participantId: string): Record<s
       })),
       sessionRoles: module.sessionRoles
     },
+    sessionRoleAssignments: session.sessionRoleAssignments,
     phase: currentPhase(session),
     phaseClock: session.phaseClock,
     tableStatuses: session.statuses,
@@ -2443,6 +2490,7 @@ app.post("/sessions", async (request, reply) => {
     unlockedPhases: [module.phases[0].id],
     risks: {},
     statuses: { ...module.state },
+    sessionRoleAssignments: defaultSessionRoleAssignments(module),
     componentPools: defaultComponentPools(module),
     pendingResolutions: [],
     exchanges: [],
@@ -2905,6 +2953,44 @@ app.post("/sessions/:code/phases/timer", async (request, reply) => {
   const clock = setPhaseTimer(session, input);
   audit(session, "phase.timer_set", { phaseClock: clock });
   broadcast(session, "phase.timer_set", { phaseClock: clock });
+  return visibleSession(session);
+});
+
+app.post("/sessions/:code/session-roles/:sessionRoleId", async (request, reply) => {
+  const { code, sessionRoleId } = request.params as { code: string; sessionRoleId: string };
+  const session = getSession(code);
+  if (!session) {
+    return reply.code(404).send({ error: "Session not found" });
+  }
+
+  const module = getModuleOrThrow(session.moduleId);
+  const input = assignSessionRoleSchema.parse(request.body);
+  const sessionRole = module.sessionRoles.find((candidate) => candidate.id === sessionRoleId);
+  if (!sessionRole) {
+    return reply.code(400).send({ error: "Unknown session role" });
+  }
+  if (!input.enabled && !sessionRole.optional) {
+    return reply.code(400).send({ error: "Required session role cannot be disabled" });
+  }
+  if (input.participantId && !session.participants.some((participant) => participant.id === input.participantId)) {
+    return reply.code(404).send({ error: "Participant not found" });
+  }
+
+  try {
+    assertSessionRoleAssignment(module, session, sessionRoleId, input.enabled ? input.participantId : undefined);
+  } catch (error) {
+    return reply.code(400).send({ error: error instanceof Error ? error.message : "Invalid session role assignment" });
+  }
+
+  const assignment: SessionRoleAssignment = {
+    sessionRoleId,
+    participantId: input.enabled ? input.participantId : undefined,
+    enabled: input.enabled,
+    assignedAt: new Date().toISOString()
+  };
+  session.sessionRoleAssignments[sessionRoleId] = assignment;
+  audit(session, "session_role.assigned", assignment);
+  broadcast(session, "session_role.assigned", assignment);
   return visibleSession(session);
 });
 
