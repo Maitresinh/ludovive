@@ -32,6 +32,51 @@
       "victoryCondition": { "type": "text", "text": "Gagne par accumulation de richesse et ventes strategiques." }
     }
   ],
+  "mechanics": [
+    {
+      "id": "direct-barter",
+      "name": "Transaction directe",
+      "family": "exchange",
+      "summary": "Deux participants transferent des ressources declarees, avec validation des soldes et visibilite filtree.",
+      "phases": ["market", "intrigue"],
+      "inputs": [
+        { "id": "fromParticipantId", "type": "participant", "source": "actor-or-bound-device" },
+        { "id": "toParticipantId", "type": "participant" },
+        { "id": "resources", "type": "resource-bundle", "allowed": ["money", "weapons", "ammo"] }
+      ],
+      "resolution": { "type": "exchange", "mode": "immediate" },
+      "visibility": { "dashboard": "full", "participants": "involved-only" },
+      "variants": [
+        { "id": "brokered", "name": "Transaction arbitree", "requiresFacilitator": true },
+        { "id": "hidden-price", "name": "Prix cache", "hideResourcesUntilResolved": true }
+      ]
+    },
+    {
+      "id": "contested-coup",
+      "name": "Coup conteste",
+      "family": "contest",
+      "summary": "Un attaquant declare une tentative, une cible peut repondre, puis les engagements caches sont reveles et compares.",
+      "phases": ["coup", "resolution"],
+      "inputs": [
+        { "id": "attackerId", "type": "participant", "source": "actor-or-bound-device" },
+        { "id": "defenderId", "type": "participant" },
+        { "id": "leaderIds", "type": "participant-list", "count": 2 },
+        { "id": "resources", "type": "resource-bundle", "allowed": ["weapons", "ammo", "influence"] }
+      ],
+      "resolution": {
+        "type": "sealedCommitment",
+        "rounds": 1,
+        "compare": "highestTotal",
+        "onTie": "facilitatorDecision",
+        "consumeCommitments": "always"
+      },
+      "visibility": { "commitments": "hidden-until-reveal", "result": "dashboard-and-involved" },
+      "variants": [
+        { "id": "open-counter", "name": "Contre public", "commitments": "defender-visible" },
+        { "id": "multi-party-coup", "name": "Coup multi-factions", "leaderCount": "2+" }
+      ]
+    }
+  ],
   "actions": [
     {
       "id": "sell-weapons",
@@ -40,6 +85,7 @@
       "actor": "any",
       "target": "player",
       "effect": { "type": "transferBundle", "resources": ["money", "weapons"] },
+      "mechanicId": "direct-barter",
       "gesture": "touch-phones",
       "fallback": "manual-confirmation"
     },
@@ -50,6 +96,7 @@
       "actor": "any",
       "target": "game",
       "effect": { "type": "contestedBid", "resources": ["weapons", "ammo", "influence"] },
+      "mechanicId": "contested-coup",
       "gesture": "strike-phone",
       "fallback": "manual-confirmation"
     }
@@ -75,4 +122,3 @@
     }
   ]
 }
-

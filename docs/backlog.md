@@ -70,6 +70,8 @@ As a module, I can declare actions that consume events, apply rules, and update 
 
 Acceptance criteria:
 
+- Modules can declare reusable mechanisms such as exchange, petition, vote, contest, coordination, hidden-role, facilitator-action, triggered-ability, zone-effect, information-action, and card-or-object.
+- Actions can bind to mechanisms with `mechanicId`.
 - Actions can be available or unavailable depending on state.
 - Actions can target participants, resources, zones, cards, or the whole session.
 - Vote weight can use a resource such as favor.

@@ -94,6 +94,21 @@ after(async () => {
   await app.close();
 });
 
+test("loads module mechanics and links actions to them", async () => {
+  const modules = await injectJson("GET", "/modules");
+  const putschSummary = modules.find((module: JsonObject) => module.id === "putsch-lite");
+  const wolfpackSummary = modules.find((module: JsonObject) => module.id === "wolfpack-lite");
+
+  assert.equal(putschSummary.mechanics, 2);
+  assert.equal(wolfpackSummary.mechanics, 3);
+
+  const putsch = await injectJson("GET", "/modules/putsch-lite");
+  const directBarter = putsch.mechanics.find((mechanic: JsonObject) => mechanic.id === "direct-barter");
+  const sellWeapons = putsch.actions.find((action: JsonObject) => action.id === "sell-weapons");
+  assert.equal(directBarter.family, "exchange");
+  assert.equal(sellWeapons.mechanicId, "direct-barter");
+});
+
 test("registers devices, creates participants, and binds one device to one participant", async () => {
   const session = await createSession();
   const code = session.code;
@@ -317,6 +332,7 @@ test("exposes participant actions with availability reasons", async () => {
   assert.equal(quietRunning.available, true);
   assert.deepEqual(quietRunning.blockedBy, []);
   assert.equal(quietRunning.gesture, "phone-face-down");
+  assert.equal(quietRunning.mechanicId, "station-action");
   assert.equal(sonarSweep.available, false);
   assert.equal(sonarSweep.blockedBy.includes("role"), true);
 });

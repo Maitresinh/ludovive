@@ -70,6 +70,63 @@
       "actions": ["decode-message", "send-burst", "intercept"]
     }
   ],
+  "mechanics": [
+    {
+      "id": "crew-command",
+      "name": "Coordination d'equipage",
+      "family": "coordination",
+      "summary": "Un role emet un ordre ou une information qui devient visible a l'equipe selon une politique de visibilite.",
+      "phases": ["*"],
+      "inputs": [
+        { "id": "actorId", "type": "participant", "source": "actor-or-bound-device" },
+        { "id": "message", "type": "text" },
+        { "id": "visibility", "type": "enum", "choices": ["team", "private", "dashboard"] }
+      ],
+      "resolution": { "type": "broadcastMessage", "mode": "immediate" },
+      "visibility": { "dashboard": "full", "team": "message-only" },
+      "variants": [
+        { "id": "captain-authorization", "name": "Autorisation du capitaine", "setsStatus": "captainAuthorization" },
+        { "id": "radio-risk", "name": "Emission risquee", "addsRisk": "enemy-detection" }
+      ]
+    },
+    {
+      "id": "station-action",
+      "name": "Action de poste",
+      "family": "resource-action",
+      "summary": "Un poste depense une ressource, modifie un statut ou produit une information exploitable par l'equipage.",
+      "phases": ["silent-running", "contact", "attack-run"],
+      "inputs": [
+        { "id": "actorId", "type": "participant", "source": "actor-or-bound-device" },
+        { "id": "cost", "type": "resource-bundle" },
+        { "id": "payload", "type": "structured" }
+      ],
+      "resolution": { "type": "applyCostThenEffect", "mode": "immediate" },
+      "visibility": { "dashboard": "full", "team": "effect-summary", "actor": "full" },
+      "variants": [
+        { "id": "sensor-check", "name": "Detection partielle", "effect": "hint" },
+        { "id": "armed-state", "name": "Etat arme", "effect": "setState" }
+      ]
+    },
+    {
+      "id": "contested-attack",
+      "name": "Attaque contestee",
+      "family": "contest",
+      "summary": "Une attaque consomme une preparation et se resout contre une defense, une distance ou une evasion.",
+      "phases": ["attack-run"],
+      "inputs": [
+        { "id": "attackerId", "type": "participant", "source": "actor-or-bound-device" },
+        { "id": "targetId", "type": "participant-or-zone" },
+        { "id": "attackResource", "type": "resource-or-status" },
+        { "id": "defenseResource", "type": "resource-or-status" }
+      ],
+      "resolution": { "type": "opposedCheck", "compare": "attack-vs-defense", "onTie": "miss-or-facilitatorDecision" },
+      "visibility": { "dashboard": "full", "teams": "result-only" },
+      "variants": [
+        { "id": "hidden-target", "name": "Cible estimee", "targetPrecision": "low" },
+        { "id": "simultaneous", "name": "Tirs simultanes", "ordering": "simultaneous" }
+      ]
+    }
+  ],
   "actions": [
     {
       "id": "issue-order",
@@ -78,6 +135,7 @@
       "actor": "captain",
       "target": "team",
       "effect": { "type": "message", "visibility": "team" },
+      "mechanicId": "crew-command",
       "gesture": "hold-phone-up",
       "fallback": "manual-confirmation"
     },
@@ -89,6 +147,7 @@
       "target": "team",
       "cost": { "battery": 1 },
       "effect": { "type": "setState", "state": "depth" },
+      "mechanicId": "station-action",
       "gesture": "tilt-phone-forward",
       "fallback": "manual-confirmation"
     },
@@ -100,6 +159,7 @@
       "target": "team",
       "cost": { "battery": 1 },
       "effect": { "type": "adjustResource", "resource": "noise", "delta": -2 },
+      "mechanicId": "station-action",
       "gesture": "phone-face-down",
       "fallback": "manual-confirmation"
     },
@@ -111,6 +171,7 @@
       "target": "zone",
       "cost": { "battery": 1 },
       "effect": { "type": "revealContactHint", "precision": "low" },
+      "mechanicId": "station-action",
       "gesture": "slow-phone-arc",
       "fallback": "manual-confirmation"
     },
@@ -122,6 +183,7 @@
       "target": "team",
       "cost": { "torpedoes": 1 },
       "effect": { "type": "setState", "state": "torpedoLoaded", "value": true },
+      "mechanicId": "station-action",
       "gesture": "slide-resource-to-edge",
       "fallback": "manual-confirmation"
     },
@@ -133,6 +195,7 @@
       "target": "enemy",
       "requires": ["torpedoLoaded", "captainAuthorization"],
       "effect": { "type": "contestedAttack", "attackResource": "solution", "defenseResource": "evasion" },
+      "mechanicId": "contested-attack",
       "gesture": "strike-phone",
       "fallback": "manual-confirmation"
     }

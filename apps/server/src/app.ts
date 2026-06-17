@@ -52,9 +52,22 @@ const actionSchema = z.object({
   target: z.string().min(1),
   cost: z.record(z.number()).optional(),
   effect: z.unknown(),
+  mechanicId: z.string().min(1).optional(),
   gesture: z.string().optional(),
   fallback: z.string().optional(),
   requires: z.array(z.string()).optional()
+});
+
+const mechanicSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  family: z.string().min(1),
+  summary: z.string().optional(),
+  phases: z.array(z.string()).optional(),
+  inputs: z.array(z.unknown()).default([]),
+  resolution: z.unknown().optional(),
+  visibility: z.unknown().optional(),
+  variants: z.array(z.unknown()).default([])
 });
 
 const zoneSchema = z.object({
@@ -79,6 +92,7 @@ const moduleSchema = z.object({
   resources: z.array(resourceSchema).default([]),
   phases: z.array(phaseSchema).min(1),
   roles: z.array(roleSchema).default([]),
+  mechanics: z.array(mechanicSchema).default([]),
   actions: z.array(actionSchema).default([]),
   zones: z.array(zoneSchema).default([]),
   victoryConditions: z.array(z.unknown()).optional()
@@ -154,6 +168,7 @@ type ActionAvailability = {
   phase: string;
   gesture?: string;
   fallback?: string;
+  mechanicId?: string;
   available: boolean;
   blockedBy: string[];
 };
@@ -655,6 +670,7 @@ function actionAvailability(session: Session, participant: Participant): ActionA
       phase: action.phase,
       gesture: action.gesture,
       fallback: action.fallback,
+      mechanicId: action.mechanicId,
       available: blockedBy.length === 0,
       blockedBy
     };
@@ -972,6 +988,7 @@ app.get("/modules", async () =>
     players: module.players,
     phases: module.phases.length,
     roles: module.roles.length,
+    mechanics: module.mechanics.length,
     actions: module.actions.length,
     zones: module.zones.length
   }))

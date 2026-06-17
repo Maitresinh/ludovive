@@ -37,6 +37,50 @@
       "victoryCondition": { "type": "text", "text": "Gagne avec un heritier et plus de statut que tous les autres joueurs." }
     }
   ],
+  "mechanics": [
+    {
+      "id": "petition-vote",
+      "name": "Petition et vote du conseil",
+      "family": "petition",
+      "summary": "Un participant depose une demande, les autres votent pour ou contre, puis une autorite ou une table de decision tranche.",
+      "phases": ["council"],
+      "inputs": [
+        { "id": "petitionerId", "type": "participant", "source": "actor-or-bound-device" },
+        { "id": "petitionText", "type": "text" },
+        { "id": "votes", "type": "vote-list", "choices": ["for", "against"] }
+      ],
+      "resolution": {
+        "type": "weightedVoteThenAuthority",
+        "weightResource": "favor",
+        "fallback": "democraticVote",
+        "authority": "king-or-regent"
+      },
+      "visibility": { "petition": "public", "votes": "public-after-cast", "decision": "public" },
+      "variants": [
+        { "id": "democratic", "name": "Vote democratique", "weightResource": null },
+        { "id": "authority-only", "name": "Decision de l'autorite", "skipVotes": true },
+        { "id": "delayed", "name": "Petition reportee", "resolveAtPhase": "next-council" }
+      ]
+    },
+    {
+      "id": "direct-gift",
+      "name": "Don direct",
+      "family": "exchange",
+      "summary": "Un participant transfere une ressource a un autre pendant une phase libre.",
+      "phases": ["diplomacy"],
+      "inputs": [
+        { "id": "fromParticipantId", "type": "participant", "source": "actor-or-bound-device" },
+        { "id": "toParticipantId", "type": "participant" },
+        { "id": "resources", "type": "resource-bundle", "allowed": ["gold"] }
+      ],
+      "resolution": { "type": "exchange", "mode": "immediate" },
+      "visibility": { "dashboard": "full", "participants": "involved-only" },
+      "variants": [
+        { "id": "bribe", "name": "Pot-de-vin lie a un vote", "linksTo": "petition-vote" },
+        { "id": "forced-payment", "name": "Paiement force", "requiresRuleTrigger": true }
+      ]
+    }
+  ],
   "actions": [
     {
       "id": "submit-petition",
@@ -44,7 +88,8 @@
       "phase": "council",
       "actor": "any",
       "target": "game",
-      "effect": { "type": "openVote", "weightResource": "favor" }
+      "effect": { "type": "openVote", "weightResource": "favor" },
+      "mechanicId": "petition-vote"
     },
     {
       "id": "transfer-gold",
@@ -53,6 +98,7 @@
       "actor": "any",
       "target": "player",
       "effect": { "type": "transferResource", "resource": "gold" },
+      "mechanicId": "direct-gift",
       "gesture": "touch-phones",
       "fallback": "manual-confirmation"
     }
@@ -69,4 +115,3 @@
     }
   ]
 }
-

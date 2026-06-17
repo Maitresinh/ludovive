@@ -30,9 +30,10 @@ First test target:
 ## Sprint 2: Module Loading and State Model
 
 - Load example module.
-- Validate roles, resources, phases, and actions.
+- Validate roles, resources, phases, mechanics, and actions.
 - Start a session from a module.
 - Represent participants, devices, resources, statuses, zones, and permissions.
+- Bind player-facing actions to reusable mechanisms with `mechanicId`.
 
 ## Sprint 3: Read Models and Dashboard
 
@@ -45,7 +46,9 @@ First test target:
 ## Sprint 4: Actions, Votes, Petitions
 
 - Execute configured actions.
+- Execute the first mechanism runners.
 - Resolve simple votes.
+- Resolve simple petitions and contests.
 - Add rule tests.
 
 ## Sprint 5+: Physical Gestures

@@ -42,6 +42,25 @@ This is the first conceptual schema for importable Thaumacord modules.
       }
     }
   ],
+  "mechanics": [
+    {
+      "id": "direct-gift",
+      "name": "Direct Gift",
+      "family": "exchange",
+      "summary": "One participant transfers a declared resource to another participant.",
+      "phases": ["diplomacy"],
+      "inputs": [],
+      "resolution": {
+        "type": "exchange",
+        "mode": "immediate"
+      },
+      "visibility": {
+        "dashboard": "full",
+        "participants": "involved-only"
+      },
+      "variants": []
+    }
+  ],
   "actions": [
     {
       "id": "transfer-gold",
@@ -54,6 +73,7 @@ This is the first conceptual schema for importable Thaumacord modules.
         "type": "transferResource",
         "resource": "gold"
       },
+      "mechanicId": "direct-gift",
       "gesture": "touch-phones",
       "fallback": "manual-confirmation"
     }
@@ -71,6 +91,24 @@ This is the first conceptual schema for importable Thaumacord modules.
   "triggers": []
 }
 ```
+
+## Mechanics
+
+Mechanics describe reusable workflows that modules can create, vary, and bind to player-facing actions without hard-coding a specific game in the server.
+
+Supported fields in the prototype:
+
+- `id`: stable identifier used by actions through `mechanicId`;
+- `name`: table-facing name;
+- `family`: broad mechanism family such as `exchange`, `petition`, `vote`, `contest`, `coordination`, `hidden-role`, `facilitator-action`, `triggered-ability`, `zone-effect`, `information-action`, or `card-or-object`;
+- `summary`: short designer-facing description;
+- `phases`: phases where this mechanism normally applies;
+- `inputs`: free structured input declaration;
+- `resolution`: free structured resolution declaration;
+- `visibility`: free structured visibility policy;
+- `variants`: free structured list of supported variants.
+
+Actions can include `mechanicId` to bind a verb to a mechanism.
 
 ## Supported Action Execution In Prototype
 
@@ -91,7 +129,7 @@ Supported effects:
 - `message`: stores a simple last message status;
 - `revealContactHint`: stores a contact hint status.
 
-Participant read models expose `availableActions` derived from module actions. Each item contains `id`, `name`, `phase`, optional `gesture`, optional `fallback`, `available`, and `blockedBy`.
+Participant read models expose `availableActions` derived from module actions. Each item contains `id`, `name`, `phase`, optional `gesture`, optional `fallback`, optional `mechanicId`, `available`, and `blockedBy`.
 
 Gesture events can omit `actionId` when the module action has a matching `gesture`. The server only resolves the gesture if the action is currently available for the participant.
 
