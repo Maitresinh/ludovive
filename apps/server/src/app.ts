@@ -661,6 +661,16 @@ function createSessionMessage(session: Session, input: z.infer<typeof sessionMes
   return message;
 }
 
+function resolutionOutcomeLabel(resolution: PendingResolution, outcomeId: string): string {
+  return resolutionOutcomes(resolution).find((outcome) => outcome.id === outcomeId)?.label ?? outcomeId;
+}
+
+function resolutionResolvedText(session: Session, resolution: PendingResolution, input: z.infer<typeof resolveResolutionSchema>): string {
+  const label = resolutionOutcomeLabel(resolution, input.outcome);
+  const summary = resolutionSummary(session, resolution);
+  return input.note ? `Resolution: ${summary} -> ${label}. ${input.note}` : `Resolution: ${summary} -> ${label}.`;
+}
+
 function resolvePendingResolution(session: Session, resolutionId: string, input: z.infer<typeof resolveResolutionSchema>): Record<string, unknown> {
   const index = session.pendingResolutions.findIndex((resolution) => resolution.id === resolutionId);
   if (index === -1) {
@@ -668,12 +678,20 @@ function resolvePendingResolution(session: Session, resolutionId: string, input:
   }
 
   const [resolution] = session.pendingResolutions.splice(index, 1);
+  const message = createSessionMessage(session, {
+    target: resolution.participantId ? "participant" : "allParticipants",
+    participantId: resolution.participantId,
+    channel: "resolution",
+    text: resolutionResolvedText(session, resolution, input)
+  });
+
   return {
     resolutionId,
     resolution,
     outcome: input.outcome,
     note: input.note,
     payload: input.payload,
+    message,
     resolvedAt: new Date().toISOString()
   };
 }

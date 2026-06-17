@@ -201,6 +201,8 @@ Supported effects:
 
 If an action is bound to a workflow mechanism such as `petition`, `vote`, or `contest`, unsupported immediate effects can open a `pendingResolution` instead of being discarded. The resolution keeps the action, participant, payload, mechanic id, mechanic family, and module-declared resolution/visibility policy for later rule handling.
 
+When the facilitator resolves a pending resolution, the server records the selected outcome and creates a `resolution` channel message. Participant-bound resolutions notify only the concerned participant; table-level resolutions notify all participants.
+
 If an action is bound to an `exchange` mechanic, or declares an effect of type `transferBundle` or `transferResource`, the participant payload can apply an immediate exchange with `toParticipantId` and `resources`. The exchange is validated against resource bounds and the action/mechanic resource limits, then recorded in the session exchange log.
 
 Participant read models expose `availableActions` derived from module actions. Each item contains `id`, `name`, `phase`, optional `gesture`, optional `fallback`, optional `mechanicId`, optional `inputs`, `available`, and `blockedBy`.

@@ -884,8 +884,11 @@ test("lets the facilitator resolve a pending resolution", async () => {
   const session = await createSession("putsch-lite");
   const code = session.code;
   const device = await createDevice(code, "Telephone general");
+  const otherDevice = await createDevice(code, "Telephone marchand");
   const participant = await createParticipant(code, "General", "general");
+  const other = await createParticipant(code, "Marchand", "dealer");
   await bindDevice(code, device.device.id, participant.participant.id);
+  await bindDevice(code, otherDevice.device.id, other.participant.id);
   await advancePhase(code);
   await advancePhase(code);
 
@@ -905,11 +908,19 @@ test("lets the facilitator resolve a pending resolution", async () => {
   assert.equal(resolved.accepted, true);
   assert.equal(resolved.resolveResult.resolutionId, resolutionId);
   assert.equal(resolved.resolveResult.outcome, "attacker-wins");
+  assert.equal(resolved.resolveResult.message.channel, "resolution");
+  assert.equal(resolved.resolveResult.message.target, "participant");
+  assert.equal(resolved.resolveResult.message.participantId, participant.participant.id);
+  assert.match(resolved.resolveResult.message.text, /Attaquant gagne/);
   assert.equal(resolved.dashboard.pendingResolutions.length, 0);
+  assert.equal(resolved.dashboard.messages.at(-1).channel, "resolution");
   assert.equal(resolved.dashboard.audit.at(-1).type, "resolution.resolved");
 
   const deviceModel = await injectJson("GET", `/sessions/${code}/read-models/device/${device.device.id}`);
+  const otherModel = await injectJson("GET", `/sessions/${code}/read-models/device/${otherDevice.device.id}`);
   assert.deepEqual(deviceModel.pendingResolutions, []);
+  assert.equal(deviceModel.messages.at(-1).channel, "resolution");
+  assert.equal(otherModel.messages.some((message: JsonObject) => message.channel === "resolution"), false);
 });
 
 test("maps participant presence to imaginary zones and applies zone effects", async () => {
