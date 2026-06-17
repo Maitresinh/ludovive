@@ -1684,6 +1684,12 @@ function renderIndex(): string {
     function dashboardResourceLabel(session, resourceId) {
       return session.module.resources.find((resource) => resource.id === resourceId)?.name || resourceId;
     }
+    function dashboardParticipantOptions(session) {
+      return option("", "Cible liee") + session.participants.map((participant) => option(participant.id, participant.name)).join("");
+    }
+    function dashboardResourceOptions(session) {
+      return session.module.resources.map((resource) => option(resource.id, resource.name)).join("");
+    }
     function formatClock(clock) {
       if (!clock) return "sans minuteur";
       const end = clock.phaseEndsAt ? new Date(clock.phaseEndsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "fin libre";
@@ -1769,7 +1775,7 @@ function renderIndex(): string {
         const participant = session.participants.find((candidate) => candidate.id === resolution.participantId);
         const payload = resolution.payload ? JSON.stringify(resolution.payload) : "";
         const outcomes = (resolution.recommendedOutcomes || [{ id: "facilitator-resolved", label: "Marquer resolue" }]).map((outcome) => '<button class="secondary resolveResolution" data-resolution-id="' + resolution.id + '" data-outcome="' + outcome.id + '">' + outcome.label + '</button>').join("");
-        return '<div class="item"><strong>' + resolution.type + '</strong><div>' + (resolution.summary || (participant ? participant.name : "table")) + '</div><div class="muted">' + (resolution.mechanicId || resolution.mechanicFamily || "sans mecanique") + '</div><div class="muted">' + payload + '</div><div class="actions">' + outcomes + '</div></div>';
+        return '<div class="item"><strong>' + resolution.type + '</strong><div>' + (resolution.summary || (participant ? participant.name : "table")) + '</div><div class="muted">' + (resolution.mechanicId || resolution.mechanicFamily || "sans mecanique") + '</div><div class="muted">' + payload + '</div><label>Note MJ</label><input data-resolution-note placeholder="Note optionnelle" /><div class="row"><div><label>Cible effet</label><select data-resolution-effect-participant>' + dashboardParticipantOptions(session) + '</select></div><div><label>Ressource</label><select data-resolution-resource>' + dashboardResourceOptions(session) + '</select></div></div><label>Delta ressource</label><input type="number" value="0" data-resolution-resource-delta /><div class="row"><div><label>Statut</label><input data-resolution-state placeholder="ex: coupOutcome" /></div><div><label>Valeur</label><input data-resolution-state-value placeholder="ex: attacker-wins" /></div></div><div class="actions">' + outcomes + '</div></div>';
       }).join("") || '<div class="muted">Aucune resolution en attente</div>';
       byId("audit").textContent = JSON.stringify((session.audit || []).slice(-12), null, 2);
       byId("state").textContent = JSON.stringify(session, null, 2);
@@ -1785,6 +1791,26 @@ function renderIndex(): string {
       byId("roleParticipant").innerHTML = participantOptions;
       byId("messageTarget").innerHTML = messageOptions;
       byId("bindDeviceId").innerHTML = session.devices.map((device) => option(device.id, device.name + (device.participantId ? " (lie)" : ""))).join("");
+    }
+    function collectResolutionPayload(card) {
+      const payload = {};
+      const effects = [];
+      const participantId = card.querySelector("[data-resolution-effect-participant]")?.value || undefined;
+      const resource = card.querySelector("[data-resolution-resource]")?.value;
+      const delta = Number(card.querySelector("[data-resolution-resource-delta]")?.value || 0);
+      if (resource && Number.isInteger(delta) && delta !== 0) {
+        const effect = { type: "adjustResource", resource, delta };
+        if (participantId) effect.participantId = participantId;
+        effects.push(effect);
+      }
+      const state = card.querySelector("[data-resolution-state]")?.value.trim();
+      if (state) {
+        const effect = { type: "setState", state, value: card.querySelector("[data-resolution-state-value]")?.value || true };
+        if (participantId) effect.participantId = participantId;
+        effects.push(effect);
+      }
+      if (effects.length) payload.effects = effects;
+      return payload;
     }
     byId("module").addEventListener("change", async () => loadModuleDetails(byId("module").value));
     byId("create").addEventListener("click", () => run(async () => {
@@ -1847,7 +1873,11 @@ function renderIndex(): string {
     byId("pendingResolutions").addEventListener("click", (event) => run(async () => {
       const button = event.target.closest(".resolveResolution");
       if (!button) return;
-      await api("/sessions/" + sessionCode + "/resolutions/" + button.dataset.resolutionId + "/resolve", { method: "POST", body: JSON.stringify({ outcome: button.dataset.outcome || "facilitator-resolved" }) });
+      const card = button.closest(".item");
+      const note = card.querySelector("[data-resolution-note]")?.value.trim();
+      const body = { outcome: button.dataset.outcome || "facilitator-resolved", payload: collectResolutionPayload(card) };
+      if (note) body.note = note;
+      await api("/sessions/" + sessionCode + "/resolutions/" + button.dataset.resolutionId + "/resolve", { method: "POST", body: JSON.stringify(body) });
       await refresh();
     }));
     byId("setResource").addEventListener("click", () => run(async () => {
