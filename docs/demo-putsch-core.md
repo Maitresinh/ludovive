@@ -39,6 +39,7 @@ Out of scope:
 - Participant read models remain filtered.
 - Audit is understandable enough to reconstruct the table sequence.
 - Facilitator can see and manually close pending rule resolutions.
+- Facilitator can set a phase timer visible in participant read models.
 
 ## Missing UX To Build
 

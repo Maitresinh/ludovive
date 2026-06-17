@@ -117,6 +117,7 @@ test("serves a one-page Putsch core demo dashboard", async () => {
   assert.match(response.body, /Attribuer role/);
   assert.match(response.body, /Resolutions/);
   assert.match(response.body, /Marquer resolue/);
+  assert.match(response.body, /Regler minuteur/);
 });
 
 test("serves a mobile participant app for session join", async () => {
@@ -165,6 +166,22 @@ test("lets the facilitator assign a role after participant join", async () => {
   assert.equal(participantSync.readModel.participant.roleId, "dealer");
   assert.equal(participantSync.readModel.participant.resources.money, 12);
   assert.equal(participantSync.audit.entries.at(-1).type, "role.assigned");
+});
+
+test("sends facilitator phase timers to participant read models", async () => {
+  const session = await createSession("putsch-lite");
+  const code = session.code;
+  const joined = await injectJson("POST", `/sessions/${code}/join`, {
+    name: "Ana",
+    roleId: "general"
+  });
+
+  await setPhaseTimer(code, { durationSeconds: 420 });
+  const participantSync = await injectJson("GET", `/sessions/${code}/devices/${joined.device.id}/sync`);
+
+  assert.equal(participantSync.readModel.phaseClock.phaseDurationSeconds, 420);
+  assert.equal(participantSync.readModel.phaseClock.facilitatorControlled, true);
+  assert.equal(typeof participantSync.readModel.phaseClock.phaseEndsAt, "string");
 });
 
 test("loads module mechanics and links actions to them", async () => {

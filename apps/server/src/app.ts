@@ -1019,6 +1019,7 @@ function minimalReadModel(session: Session): Record<string, unknown> {
       }))
     },
     phase: currentPhase(session),
+    phaseClock: session.phaseClock,
     devices: session.devices.map((device) => ({
       id: device.id,
       name: device.name,
@@ -1199,6 +1200,7 @@ function participantReadModel(session: Session, participantId: string): Record<s
       }))
     },
     phase: currentPhase(session),
+    phaseClock: session.phaseClock,
     participant,
     availableActions: actionAvailability(session, participant),
     pendingResolutions: session.pendingResolutions.filter((resolution) => resolution.participantId === participant.id),
@@ -1363,6 +1365,11 @@ function renderIndex(): string {
             </div>
           </div>
           <button id="setResource" class="neutral">Corriger</button>
+
+          <h3>Temps</h3>
+          <label for="phaseDuration">Duree phase (secondes)</label>
+          <input id="phaseDuration" type="number" min="1" value="300" />
+          <button id="setTimer" class="secondary">Regler minuteur</button>
           <button id="advance" class="secondary">Phase suivante</button>
         </section>
       </div>
@@ -1431,6 +1438,11 @@ function renderIndex(): string {
     function dashboardResourceLabel(session, resourceId) {
       return session.module.resources.find((resource) => resource.id === resourceId)?.name || resourceId;
     }
+    function formatClock(clock) {
+      if (!clock) return "sans minuteur";
+      const end = clock.phaseEndsAt ? new Date(clock.phaseEndsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "fin libre";
+      return "Tour " + clock.turn + " - " + (clock.phaseDurationSeconds || "sans duree") + "s - fin " + end;
+    }
     function connectLive(code) {
       if (liveSocket) liveSocket.close();
       const protocol = location.protocol === "https:" ? "wss" : "ws";
@@ -1482,6 +1494,7 @@ function renderIndex(): string {
         '<span class="pill">Code ' + session.code + '</span>',
         '<span class="pill">' + session.module.name + '</span>',
         '<span class="pill">Phase ' + session.phase.name + '</span>',
+        '<span class="pill">' + formatClock(session.phaseClock) + '</span>',
         '<span class="pill">' + session.devices.length + ' appareil(s)</span>',
         '<span class="pill">' + session.participants.length + ' participant(s)</span>'
       ].join(" ");
@@ -1583,6 +1596,11 @@ function renderIndex(): string {
       await api("/sessions/" + sessionCode + "/players/" + byId("resourceParticipant").value + "/resources", { method: "POST", body: JSON.stringify({ resourceId: byId("resourceId").value, value: Number(byId("resourceValue").value) }) });
       await refresh();
     }));
+    byId("setTimer").addEventListener("click", () => run(async () => {
+      const code = byId("code").value || sessionCode;
+      await api("/sessions/" + code + "/phases/timer", { method: "POST", body: JSON.stringify({ durationSeconds: Number(byId("phaseDuration").value) }) });
+      await refresh();
+    }));
     byId("advance").addEventListener("click", () => run(async () => {
       const code = byId("code").value || sessionCode;
       await api("/sessions/" + code + "/phases/advance", { method: "POST", body: JSON.stringify({}) });
@@ -1646,6 +1664,7 @@ function renderParticipantApp(): string {
     <section id="tablePanel" class="hidden">
       <h2 id="participantTitle">Participant</h2>
       <div id="summary"></div>
+      <div id="phaseClock" class="muted"></div>
       <h3>Ressources</h3>
       <div id="resources" class="stack"></div>
       <h3>Echange</h3>
@@ -1718,6 +1737,11 @@ function renderParticipantApp(): string {
     function roleLabel(model, roleId) {
       return model.module.roles.find((role) => role.id === roleId)?.name || roleId || "role a attribuer";
     }
+    function formatClock(clock) {
+      if (!clock) return "sans minuteur";
+      const end = clock.phaseEndsAt ? new Date(clock.phaseEndsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "fin libre";
+      return "Tour " + clock.turn + " - " + (clock.phaseDurationSeconds || "sans duree") + "s - fin " + end;
+    }
     function render(model) {
       byId("state").textContent = JSON.stringify(model, null, 2);
       if (model.readModel === "device.unbound") {
@@ -1733,6 +1757,7 @@ function renderParticipantApp(): string {
         '<span class="pill">Phase ' + model.phase.name + '</span>',
         '<span class="pill">' + roleLabel(model, model.participant.roleId) + '</span>'
       ].join(" ");
+      byId("phaseClock").textContent = formatClock(model.phaseClock);
       byId("resources").innerHTML = Object.entries(model.participant.resources || {}).map(([key, value]) => '<div class="item"><strong>' + resourceLabel(model, key) + '</strong><div>' + value + '</div></div>').join("") || '<div class="muted">Aucune ressource</div>';
       const otherParticipants = (model.visibleParticipants || []).filter((participant) => participant.id !== model.participant.id);
       byId("exchangeTo").innerHTML = otherParticipants.map((participant) => option(participant.id, participant.name + (participant.roleId ? " (" + roleLabel(model, participant.roleId) + ")" : ""))).join("");
