@@ -19,6 +19,17 @@
     { "id": "torpedoes", "name": "Torpilles", "visibility": "team", "min": 0, "max": 6 },
     { "id": "intel", "name": "Renseignements", "visibility": "private", "min": 0 }
   ],
+  "sessionRoles": [
+    {
+      "id": "host",
+      "name": "Hote capitaine",
+      "description": "Ouvre la session et garde le rythme, mais reste un membre de l'equipage.",
+      "capabilities": ["session.host", "participants.manage", "roles.assign", "phase.control"],
+      "canInjectGameElements": false,
+      "assignableToRoles": ["captain"],
+      "defaultRoleId": "captain"
+    }
+  ],
   "phases": [
     { "id": "briefing", "name": "Briefing", "durationSeconds": 180 },
     { "id": "silent-running", "name": "Navigation silencieuse", "durationSeconds": 600 },

@@ -33,6 +33,26 @@ This is the first conceptual schema for importable Thaumacord modules.
       "durationSeconds": 900
     }
   ],
+  "sessionRoles": [
+    {
+      "id": "host",
+      "name": "Host",
+      "description": "Opens the session and manages table flow.",
+      "capabilities": ["session.host", "participants.manage", "roles.assign", "phase.control"],
+      "canInjectGameElements": false,
+      "assignableToRoles": [],
+      "optional": false
+    },
+    {
+      "id": "game-authority",
+      "name": "Game Authority",
+      "description": "Can inject, correct, or arbitrate game elements outside normal player limits.",
+      "capabilities": ["resources.adjust", "state.adjust", "components.draw", "messages.send", "resolutions.override"],
+      "canInjectGameElements": true,
+      "assignableToRoles": ["baron"],
+      "optional": true
+    }
+  ],
   "roles": [
     {
       "id": "baron",
@@ -127,6 +147,15 @@ This is the first conceptual schema for importable Thaumacord modules.
 `timeline` is loose timing metadata for table-time games. It can describe the round label, total turn count, facilitator timing policy, convergence phase, and decision phase.
 
 `state` can declare initial table-wide state such as market prices, council flags, panic levels, economic indicators, or other shared tracks. The session exposes this state to dashboard and participant read models.
+
+## Session Roles
+
+`sessionRoles` separates table operation from in-fiction player roles. This matters because the person who opens a session is not always a classical GM.
+
+- `host` is the technical/session role: it creates or opens the session, accepts devices, assigns roles, and controls phase timing.
+- `game-authority` is optional rule authority: it can inject game elements, correct state, arbitrate resolutions, draw components, send private/public messages, or override normal player limits when the module permits it.
+- `canInjectGameElements` tells the app whether this session role can introduce or modify game state beyond ordinary participant actions.
+- `assignableToRoles` links the session role to in-game roles when needed. In Putsch, the host and the director/MJ authority can be combined or separated. In the submarine module, the host can simply be the captain and does not need injection authority.
 
 The server keeps an active `phaseClock` on each session:
 

@@ -38,10 +38,24 @@ const phaseSchema = z.object({
 const roleSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
+  officialRole: z.string().optional(),
+  secretRole: z.string().optional(),
   startingResources: z.record(z.number()).default({}),
   responsibilities: z.array(z.string()).optional(),
   actions: z.array(z.string()).optional(),
   victoryCondition: z.unknown().optional()
+});
+
+const sessionRoleSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().optional(),
+  capabilities: z.array(z.string()).default([]),
+  canInjectGameElements: z.boolean().default(false),
+  optional: z.boolean().default(false),
+  assignableToRoles: z.array(z.string()).default([]),
+  defaultRoleId: z.string().min(1).optional(),
+  modes: z.array(z.string()).default([])
 });
 
 const actionSchema = z.object({
@@ -118,6 +132,7 @@ const moduleSchema = z.object({
   teamMode: z.unknown().optional(),
   resources: z.array(resourceSchema).default([]),
   phases: z.array(phaseSchema).min(1),
+  sessionRoles: z.array(sessionRoleSchema).default([]),
   roles: z.array(roleSchema).default([]),
   components: z.array(componentSchema).default([]),
   setup: setupSchema.optional(),
@@ -1293,8 +1308,11 @@ function minimalReadModel(session: Session): Record<string, unknown> {
       })),
       roles: module.roles.map((role) => ({
         id: role.id,
-        name: role.name
-      }))
+        name: role.name,
+        officialRole: role.officialRole,
+        secretRole: role.secretRole
+      })),
+      sessionRoles: module.sessionRoles
     },
     phase: currentPhase(session),
     phaseClock: session.phaseClock,
@@ -1535,8 +1553,11 @@ function participantReadModel(session: Session, participantId: string): Record<s
       })),
       roles: module.roles.map((role) => ({
         id: role.id,
-        name: role.name
-      }))
+        name: role.name,
+        officialRole: role.officialRole,
+        secretRole: role.secretRole
+      })),
+      sessionRoles: module.sessionRoles
     },
     phase: currentPhase(session),
     phaseClock: session.phaseClock,
@@ -2386,6 +2407,7 @@ app.get("/modules", async () =>
     players: module.players,
     phases: module.phases.length,
     roles: module.roles.length,
+    sessionRoles: module.sessionRoles.length,
     components: module.components.length,
     setup: Boolean(module.setup),
     mechanics: module.mechanics.length,

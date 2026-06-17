@@ -172,6 +172,7 @@ test("lets a participant join with a chosen role and receive a filtered read mod
   assert.equal(joined.readModel.visibleParticipants.length, 1);
   assert.equal(joined.readModel.module.resources.find((resource: JsonObject) => resource.id === "money").name, "Escudos");
   assert.equal(joined.readModel.module.roles.find((role: JsonObject) => role.id === "general").name, "General");
+  assert.equal(joined.readModel.module.sessionRoles.find((role: JsonObject) => role.id === "game-authority").canInjectGameElements, true);
   assert.equal(joined.readModel.tableStatuses.copperPrice, 1000);
 });
 
@@ -214,6 +215,7 @@ test("loads module mechanics and links actions to them", async () => {
   const kingSummary = modules.find((module: JsonObject) => module.id === "long-live-the-king-lite");
 
   assert.equal(putschSummary.mechanics, 2);
+  assert.equal(putschSummary.sessionRoles, 2);
   assert.equal(wolfpackSummary.mechanics, 3);
   assert.equal(kingSummary.components, 6);
   assert.equal(kingSummary.setup, true);
@@ -225,7 +227,13 @@ test("loads module mechanics and links actions to them", async () => {
   assert.equal(sellWeapons.mechanicId, "direct-barter");
   assert.equal(putsch.state.copperPrice, 1000);
   assert.equal(putsch.roles.find((role: JsonObject) => role.id === "facilitator-capitalist").name, "Paquito Borrachon");
+  assert.equal(putsch.roles.find((role: JsonObject) => role.id === "facilitator-capitalist").officialRole, "President des mines de cuivre d'Alcabal et meneur de jeu.");
   assert.equal(putsch.roles.find((role: JsonObject) => role.id === "facilitator-capitalist").startingResources.copperShares, 50);
+  assert.equal(putsch.sessionRoles.find((role: JsonObject) => role.id === "host").canInjectGameElements, false);
+  assert.equal(putsch.sessionRoles.find((role: JsonObject) => role.id === "game-authority").defaultRoleId, "facilitator-capitalist");
+  const wolfpack = await injectJson("GET", "/modules/wolfpack-lite");
+  assert.equal(wolfpack.sessionRoles.find((role: JsonObject) => role.id === "host").defaultRoleId, "captain");
+  assert.equal(wolfpack.sessionRoles.find((role: JsonObject) => role.id === "host").canInjectGameElements, false);
   assert.equal(putsch.actions.find((action: JsonObject) => action.id === "embezzle-council-funds").phase, "first-council");
   assert.equal(putsch.actions.find((action: JsonObject) => action.id === "embezzle-council-funds").effect.delta, 5000);
 });

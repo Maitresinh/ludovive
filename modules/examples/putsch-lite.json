@@ -34,6 +34,28 @@
     { "id": "drugBags", "name": "Sacs de drogue", "visibility": "private", "min": 0 },
     { "id": "voteBallots", "name": "Bulletins de vote", "visibility": "private", "min": 0 }
   ],
+  "sessionRoles": [
+    {
+      "id": "host",
+      "name": "Hote technique",
+      "description": "Ouvre la session, accueille les appareils, assigne les roles et garde le rythme de table.",
+      "capabilities": ["session.host", "participants.manage", "roles.assign", "phase.control"],
+      "canInjectGameElements": false,
+      "optional": false,
+      "modes": ["separate", "combined-with-game-authority"]
+    },
+    {
+      "id": "game-authority",
+      "name": "Autorite d'injection",
+      "description": "Peut introduire, corriger ou arbitrer des elements de jeu sans les limites normales des joueurs.",
+      "capabilities": ["resources.adjust", "state.adjust", "components.draw", "messages.send", "resolutions.override"],
+      "canInjectGameElements": true,
+      "optional": true,
+      "assignableToRoles": ["facilitator-capitalist"],
+      "defaultRoleId": "facilitator-capitalist",
+      "modes": ["hote-et-directeur", "hote-separe-directeur-joueur"]
+    }
+  ],
   "phases": [
     { "id": "market", "name": "Marche", "durationSeconds": 600 },
     { "id": "intrigue", "name": "Intrigue", "durationSeconds": 900 },
