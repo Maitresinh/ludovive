@@ -331,6 +331,22 @@ const resolveResolutionSchema = z.object({
   payload: z.record(z.unknown()).default({})
 });
 
+const resolutionResourceDeltaEffectSchema = z.object({
+  type: z.literal("adjustResource"),
+  participantId: z.string().min(1).optional(),
+  resource: z.string().min(1),
+  delta: z.number().int()
+});
+
+const resolutionSetStateEffectSchema = z.object({
+  type: z.literal("setState"),
+  participantId: z.string().min(1).optional(),
+  state: z.string().min(1),
+  value: z.unknown().optional()
+});
+
+const resolutionEffectSchema = z.discriminatedUnion("type", [resolutionResourceDeltaEffectSchema, resolutionSetStateEffectSchema]);
+
 const eventSchema = z.object({
   type: z.string().min(1),
   actionId: z.string().min(1).optional(),
@@ -393,6 +409,7 @@ const knownZoneEffectSchema = z.discriminatedUnion("type", [
 
 type KnownEffect = z.infer<typeof knownEffectSchema>;
 type KnownZoneEffect = z.infer<typeof knownZoneEffectSchema>;
+type ResolutionEffect = z.infer<typeof resolutionEffectSchema>;
 type EventInput = z.infer<typeof eventSchema>;
 
 function modulesDir(): string {
@@ -671,13 +688,61 @@ function resolutionResolvedText(session: Session, resolution: PendingResolution,
   return input.note ? `Resolution: ${summary} -> ${label}. ${input.note}` : `Resolution: ${summary} -> ${label}.`;
 }
 
+function resolutionEffectTarget(session: Session, resolution: PendingResolution, effect: ResolutionEffect): Participant {
+  const participantId = effect.participantId ?? resolution.participantId;
+  const participant = session.participants.find((candidate) => candidate.id === participantId);
+  if (!participant) {
+    throw new Error("Resolution effect requires a known participant");
+  }
+  return participant;
+}
+
+function resolutionEffects(input: z.infer<typeof resolveResolutionSchema>): ResolutionEffect[] {
+  if (!("effects" in input.payload)) {
+    return [];
+  }
+  return z.array(resolutionEffectSchema).parse(input.payload.effects);
+}
+
+function applyResolutionEffects(session: Session, resolution: PendingResolution, input: z.infer<typeof resolveResolutionSchema>): Record<string, unknown>[] {
+  const module = getModuleOrThrow(session.moduleId);
+  const effects = resolutionEffects(input);
+
+  for (const effect of effects) {
+    if (effect.type === "adjustResource") {
+      const participant = resolutionEffectTarget(session, resolution, effect);
+      assertResourceChange(module, participant, effect.resource, effect.delta);
+    } else {
+      resolutionEffectTarget(session, resolution, effect);
+    }
+  }
+
+  return effects.map((effect) => {
+    const participant = resolutionEffectTarget(session, resolution, effect);
+    if (effect.type === "adjustResource") {
+      return {
+        type: effect.type,
+        participantId: participant.id,
+        ...adjustResource(module, participant, effect.resource, effect.delta)
+      };
+    }
+
+    const before = participant.statuses[effect.state];
+    const after = effect.value ?? true;
+    participant.statuses[effect.state] = after;
+    return { type: effect.type, participantId: participant.id, state: effect.state, before, after };
+  });
+}
+
 function resolvePendingResolution(session: Session, resolutionId: string, input: z.infer<typeof resolveResolutionSchema>): Record<string, unknown> {
   const index = session.pendingResolutions.findIndex((resolution) => resolution.id === resolutionId);
   if (index === -1) {
     throw new Error("Resolution not found");
   }
 
-  const [resolution] = session.pendingResolutions.splice(index, 1);
+  const resolution = session.pendingResolutions[index]!;
+  const effects = applyResolutionEffects(session, resolution, input);
+  session.pendingResolutions.splice(index, 1);
   const message = createSessionMessage(session, {
     target: resolution.participantId ? "participant" : "allParticipants",
     participantId: resolution.participantId,
@@ -691,6 +756,7 @@ function resolvePendingResolution(session: Session, resolutionId: string, input:
     outcome: input.outcome,
     note: input.note,
     payload: input.payload,
+    effects,
     message,
     resolvedAt: new Date().toISOString()
   };

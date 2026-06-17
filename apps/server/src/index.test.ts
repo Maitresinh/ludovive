@@ -896,22 +896,36 @@ test("lets the facilitator resolve a pending resolution", async () => {
     type: "action.requested",
     actionId: "attempt-coup",
     sourceDeviceId: device.device.id,
-    payload: { leaderIds: ["leader-a", "leader-b"] }
+    payload: { defenderId: "pending-defender", leaderIds: ["leader-a", "leader-b"] }
   });
+  assert.equal(coup.dashboard.pendingResolutions.length, 1);
   const resolutionId = coup.dashboard.pendingResolutions[0].id;
 
   const resolved = await injectJson("POST", `/sessions/${code}/resolutions/${resolutionId}/resolve`, {
     outcome: "attacker-wins",
-    note: "MJ resolved at table"
+    note: "MJ resolved at table",
+    payload: {
+      effects: [
+        { type: "adjustResource", resource: "influence", delta: 1 },
+        { type: "setState", state: "coupOutcome", value: "attacker-wins" }
+      ]
+    }
   });
 
   assert.equal(resolved.accepted, true);
   assert.equal(resolved.resolveResult.resolutionId, resolutionId);
   assert.equal(resolved.resolveResult.outcome, "attacker-wins");
+  assert.deepEqual(
+    resolved.resolveResult.effects.map((effect: JsonObject) => effect.type),
+    ["adjustResource", "setState"]
+  );
   assert.equal(resolved.resolveResult.message.channel, "resolution");
   assert.equal(resolved.resolveResult.message.target, "participant");
   assert.equal(resolved.resolveResult.message.participantId, participant.participant.id);
   assert.match(resolved.resolveResult.message.text, /Attaquant gagne/);
+  const resolvedParticipant = resolved.dashboard.participants.find((candidate: JsonObject) => candidate.id === participant.participant.id);
+  assert.equal(resolvedParticipant.resources.influence, 3);
+  assert.equal(resolvedParticipant.statuses.coupOutcome, "attacker-wins");
   assert.equal(resolved.dashboard.pendingResolutions.length, 0);
   assert.equal(resolved.dashboard.messages.at(-1).channel, "resolution");
   assert.equal(resolved.dashboard.audit.at(-1).type, "resolution.resolved");
@@ -919,8 +933,46 @@ test("lets the facilitator resolve a pending resolution", async () => {
   const deviceModel = await injectJson("GET", `/sessions/${code}/read-models/device/${device.device.id}`);
   const otherModel = await injectJson("GET", `/sessions/${code}/read-models/device/${otherDevice.device.id}`);
   assert.deepEqual(deviceModel.pendingResolutions, []);
+  assert.equal(deviceModel.participant.resources.influence, 3);
+  assert.equal(deviceModel.participant.statuses.coupOutcome, "attacker-wins");
   assert.equal(deviceModel.messages.at(-1).channel, "resolution");
   assert.equal(otherModel.messages.some((message: JsonObject) => message.channel === "resolution"), false);
+});
+
+test("rejects invalid resolution effects without closing the resolution", async () => {
+  const session = await createSession("putsch-lite");
+  const code = session.code;
+  const device = await createDevice(code, "Telephone general");
+  const participant = await createParticipant(code, "General", "general");
+  await bindDevice(code, device.device.id, participant.participant.id);
+  await advancePhase(code);
+  await advancePhase(code);
+
+  const coup = await injectJson("POST", `/sessions/${code}/events`, {
+    type: "action.requested",
+    actionId: "attempt-coup",
+    sourceDeviceId: device.device.id,
+    payload: { defenderId: "pending-defender", leaderIds: ["leader-a", "leader-b"] }
+  });
+  const resolutionId = coup.dashboard.pendingResolutions[0].id;
+
+  const rejected = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/resolutions/${resolutionId}/resolve`,
+    payload: {
+      outcome: "attacker-wins",
+      payload: {
+        effects: [{ type: "adjustResource", resource: "relic", delta: 1 }]
+      }
+    }
+  });
+
+  assert.equal(rejected.statusCode >= 400, true);
+  assert.match(rejected.json<JsonObject>().error, /Unknown resource/);
+  const dashboard = await injectJson("GET", `/sessions/${code}/read-models/dashboard`);
+  assert.equal(dashboard.pendingResolutions.length, 1);
+  assert.equal(dashboard.pendingResolutions[0].id, resolutionId);
+  assert.equal(dashboard.messages.some((message: JsonObject) => message.channel === "resolution"), false);
 });
 
 test("maps participant presence to imaginary zones and applies zone effects", async () => {
