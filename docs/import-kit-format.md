@@ -8,7 +8,7 @@ It is not only a rules summary. It must contain the playable structure: phases, 
 
 1. Ingest source rules: PDF, DOCX, spreadsheet, markdown, pasted text, or designer notes.
 2. Extract entities: roles, resources, cards, decks, tokens, locations, tracks, statuses, phases, actions, victory conditions.
-3. Extract mechanisms: exchange, petition, vote, contest, hidden-role, facilitator-action, timed-income, card-or-object, triggered-ability, coordination.
+3. Extract mechanisms: exchange, petition, vote, contest, hidden-role, facilitator-action, timed-income, market-simulation, card-or-object, triggered-ability, coordination.
 4. Extract setup: initial phase, required components, role assignment, player distribution, decks/tracks, starting resources.
 5. Generate a module JSON.
 6. Validate schema and references.
@@ -50,6 +50,7 @@ Examples:
 - tokens;
 - physical props;
 - fictional map markers.
+- market instruments such as sheep, cash, deposits, loans, bank reserves, debt notes, and confidence markers.
 
 Current shape:
 
@@ -94,8 +95,9 @@ Current server behavior:
 - `POST /sessions/:code/setup/distribute` applies declared distributions.
 - Target `allParticipants` gives components to every participant.
 - Target `role` gives components only to participants with that `roleId`.
-- Components are stored in `participant.inventory`.
+- Components are drawn from session `componentPools` and stored in `participant.inventory`.
 - The operation is audited as `setup.distributed`.
+- `POST /sessions/:code/components/draw` can draw components later for phase income, card effects, facilitator grants, or rule-driven events.
 
 ## AI Review Checklist
 
@@ -115,5 +117,7 @@ The importer must ask for review when:
 
 1. Convert Long Live the King spreadsheet rows into component declarations and mechanism candidates.
 2. Convert Putsch rules into exchange, market, timed income, and contested-coup mechanisms.
-3. Add component validation: actions and setup distributions must reference existing components.
-4. Add deck/hand operations beyond numeric inventory.
+3. Add a `market-sheep-lite` module for price formation, supply, demand, shocks, and inventory pressure.
+4. Add a monetary simulation module for credit creation, reserve pressure, confidence, and bank run dynamics.
+5. Add component validation: actions and setup distributions must reference existing components.
+6. Add deck/hand operations beyond numeric inventory.

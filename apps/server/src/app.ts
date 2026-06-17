@@ -189,6 +189,12 @@ type Exchange = {
   createdAt: string;
 };
 
+type ComponentPool = {
+  componentId: string;
+  remaining: number;
+  exhausted: boolean;
+};
+
 type Audience =
   | { kind: "dashboard" }
   | { kind: "device"; deviceId?: string };
@@ -202,6 +208,7 @@ type Session = {
   participants: Participant[];
   unlockedPhases: string[];
   risks: Record<string, number>;
+  componentPools: Record<string, ComponentPool>;
   pendingResolutions: PendingResolution[];
   exchanges: Exchange[];
   nextAuditSequence: number;
@@ -282,6 +289,14 @@ const exchangeSchema = z.object({
   sourceDeviceId: z.string().min(1).optional(),
   toParticipantId: z.string().min(1),
   resources: z.record(z.number().int().positive())
+});
+
+const drawComponentSchema = z.object({
+  participantId: z.string().min(1).optional(),
+  sourceDeviceId: z.string().min(1).optional(),
+  componentId: z.string().min(1),
+  count: z.number().int().positive(),
+  reason: z.string().min(1).optional()
 });
 
 const eventSchema = z.object({
@@ -522,6 +537,27 @@ function adjustResource(module: GameModule, participant: Participant, resourceId
   return { resourceId, before, after };
 }
 
+function drawComponents(session: Session, componentId: string, count: number): { componentId: string; before: number; after: number; count: number } {
+  const pool = session.componentPools[componentId];
+  if (!pool) {
+    throw new Error(`Unknown component pool: ${componentId}`);
+  }
+
+  const before = pool.remaining;
+  if (before < count) {
+    throw new Error(`Component ${componentId} pool has only ${before} remaining`);
+  }
+
+  pool.remaining -= count;
+  pool.exhausted = pool.remaining === 0;
+  return {
+    componentId,
+    before,
+    after: pool.remaining,
+    count
+  };
+}
+
 function createExchange(session: Session, fromParticipantId: string, toParticipantId: string, resources: Record<string, number>): Record<string, unknown> {
   if (fromParticipantId === toParticipantId) {
     throw new Error("Exchange requires two different participants");
@@ -588,6 +624,7 @@ function runSetupDistribution(session: Session): Record<string, unknown> {
       return participant.roleId === distribution.roleId;
     });
 
+    const draw = drawComponents(session, component.id, targets.length * distribution.count);
     for (const participant of targets) {
       participant.inventory[component.id] = (participant.inventory[component.id] ?? 0) + distribution.count;
     }
@@ -599,6 +636,7 @@ function runSetupDistribution(session: Session): Record<string, unknown> {
       target: distribution.target,
       roleId: distribution.roleId,
       participantIds: targets.map((participant) => participant.id),
+      draw,
       visibility: distribution.visibility
     };
   });
@@ -607,6 +645,34 @@ function runSetupDistribution(session: Session): Record<string, unknown> {
     applied: true,
     phaseId: setup.phaseId,
     distributions: appliedDistributions
+  };
+}
+
+function drawComponentsToParticipant(session: Session, participantId: string, componentId: string, count: number): Record<string, unknown> {
+  const module = getModuleOrThrow(session.moduleId);
+  if (!module.components.some((component) => component.id === componentId)) {
+    throw new Error(`Unknown component: ${componentId}`);
+  }
+
+  const participant = session.participants.find((candidate) => candidate.id === participantId);
+  if (!participant) {
+    throw new Error("Unknown participant");
+  }
+
+  const draw = drawComponents(session, componentId, count);
+  const before = participant.inventory[componentId] ?? 0;
+  const after = before + count;
+  participant.inventory[componentId] = after;
+
+  return {
+    participantId,
+    componentId,
+    count,
+    draw,
+    inventory: {
+      before,
+      after
+    }
   };
 }
 
@@ -950,6 +1016,19 @@ function defaultResources(module: GameModule, roleId?: string): Record<string, n
   return { ...resources, ...(role?.startingResources ?? {}) };
 }
 
+function defaultComponentPools(module: GameModule): Record<string, ComponentPool> {
+  return Object.fromEntries(
+    module.components.map((component) => [
+      component.id,
+      {
+        componentId: component.id,
+        remaining: component.count ?? 0,
+        exhausted: (component.count ?? 0) === 0
+      }
+    ])
+  );
+}
+
 function visibleSession(session: Session): Session & { module: GameModule; phase: z.infer<typeof phaseSchema> } {
   return {
     ...session,
@@ -1213,6 +1292,7 @@ app.post("/sessions", async (request, reply) => {
     participants: [],
     unlockedPhases: [module.phases[0].id],
     risks: {},
+    componentPools: defaultComponentPools(module),
     pendingResolutions: [],
     exchanges: [],
     nextAuditSequence: 1,
@@ -1444,6 +1524,39 @@ app.post("/sessions/:code/setup/distribute", async (request, reply) => {
   return reply.code(202).send({
     accepted: true,
     setupResult,
+    dashboard: dashboardReadModel(session)
+  });
+});
+
+app.post("/sessions/:code/components/draw", async (request, reply) => {
+  const { code } = request.params as { code: string };
+  const session = getSession(code);
+  if (!session) {
+    return reply.code(404).send({ error: "Session not found" });
+  }
+
+  const input = drawComponentSchema.parse(request.body);
+  if (input.sourceDeviceId && !getDevice(session, input.sourceDeviceId)) {
+    return reply.code(400).send({ error: "Unknown source device" });
+  }
+
+  const participantId = inferParticipantId(session, input.participantId, input.sourceDeviceId);
+  if (!participantId) {
+    return reply.code(400).send({ error: "Participant required" });
+  }
+
+  let drawResult: Record<string, unknown>;
+  try {
+    drawResult = drawComponentsToParticipant(session, participantId, input.componentId, input.count);
+  } catch (error) {
+    return reply.code(400).send({ error: error instanceof Error ? error.message : "Component draw rejected" });
+  }
+
+  audit(session, "component.drawn", { sourceDeviceId: input.sourceDeviceId, reason: input.reason, ...drawResult });
+  broadcast(session, "component.drawn", session.audit.at(-1));
+  return reply.code(202).send({
+    accepted: true,
+    drawResult,
     dashboard: dashboardReadModel(session)
   });
 });

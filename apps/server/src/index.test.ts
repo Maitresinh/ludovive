@@ -66,6 +66,10 @@ async function createExchange(code: string, payload: JsonObject): Promise<JsonOb
   return injectJson("POST", `/sessions/${code}/exchanges`, payload);
 }
 
+async function drawComponent(code: string, payload: JsonObject): Promise<JsonObject> {
+  return injectJson("POST", `/sessions/${code}/components/draw`, payload);
+}
+
 function collectLiveMessages(url: string, expectedCount = 2): Promise<{ socket: WebSocket; messages: JsonObject[] }> {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(url);
@@ -400,6 +404,8 @@ test("runs module setup distributions into participant inventories", async () =>
   assert.equal(body.setupResult.applied, true);
   assert.equal(body.setupResult.phaseId, "setup");
   assert.equal(body.setupResult.distributions.length, 3);
+  assert.equal(body.dashboard.componentPools["intrigue-card"].remaining, 78);
+  assert.equal(body.dashboard.componentPools["status-card"].remaining, 29);
 
   const queenModel = await injectJson("GET", `/sessions/${code}/read-models/device/${queenDevice.device.id}`);
   const baronModel = await injectJson("GET", `/sessions/${code}/read-models/device/${baronDevice.device.id}`);
@@ -407,6 +413,54 @@ test("runs module setup distributions into participant inventories", async () =>
   assert.equal(queenModel.participant.inventory["status-card"], 2);
   assert.equal(baronModel.participant.inventory["intrigue-card"], 1);
   assert.equal(baronModel.participant.inventory["status-card"], 1);
+});
+
+test("draws components from pools into participant inventories", async () => {
+  const session = await createSession("long-live-the-king-lite");
+  const code = session.code;
+  const device = await createDevice(code, "Telephone reine");
+  const queen = await createParticipant(code, "Reine", "queen");
+  await bindDevice(code, device.device.id, queen.participant.id);
+
+  const draw = await drawComponent(code, {
+    sourceDeviceId: device.device.id,
+    componentId: "intrigue-card",
+    count: 2,
+    reason: "audience-income"
+  });
+
+  assert.equal(draw.accepted, true);
+  assert.equal(draw.drawResult.participantId, queen.participant.id);
+  assert.equal(draw.drawResult.draw.before, 80);
+  assert.equal(draw.drawResult.draw.after, 78);
+  assert.equal(draw.drawResult.inventory.before, 0);
+  assert.equal(draw.drawResult.inventory.after, 2);
+  assert.equal(draw.dashboard.componentPools["intrigue-card"].remaining, 78);
+
+  const model = await injectJson("GET", `/sessions/${code}/read-models/device/${device.device.id}`);
+  assert.equal(model.participant.inventory["intrigue-card"], 2);
+});
+
+test("rejects component draws that exceed the pool", async () => {
+  const session = await createSession("long-live-the-king-lite");
+  const code = session.code;
+  const participant = await createParticipant(code, "Baron", "baron");
+
+  const draw = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/components/draw`,
+    payload: {
+      participantId: participant.participant.id,
+      componentId: "health-card",
+      count: 8
+    }
+  });
+
+  assert.equal(draw.statusCode, 400);
+  assert.match(draw.json<JsonObject>().error, /only 7 remaining/);
+  const dashboard = await injectJson("GET", `/sessions/${code}/read-models/dashboard`);
+  assert.equal(dashboard.componentPools["health-card"].remaining, 7);
+  assert.deepEqual(dashboard.participants.find((candidate: JsonObject) => candidate.id === participant.participant.id).inventory, {});
 });
 
 test("transfers resources between participants and filters exchange read models", async () => {

@@ -147,7 +147,20 @@ Default phase durations come from `phases[].durationSeconds`. A facilitator can 
 - `instructions`: facilitator-facing setup checklist;
 - `distributions`: initial component distribution rules.
 
-The prototype supports `POST /sessions/:code/setup/distribute`, which applies setup distributions to `participant.inventory` and audits `setup.distributed`.
+The prototype supports `POST /sessions/:code/setup/distribute`, which draws from session `componentPools`, applies setup distributions to `participant.inventory`, and audits `setup.distributed`.
+
+The prototype also supports `POST /sessions/:code/components/draw` for facilitator or rule-driven draws:
+
+```json
+{
+  "participantId": "participant-id",
+  "componentId": "intrigue-card",
+  "count": 2,
+  "reason": "audience-income"
+}
+```
+
+`sourceDeviceId` can stand in for `participantId` when the device is bound. Draws are rejected if the component pool does not contain enough remaining elements.
 
 ## Mechanics
 
