@@ -1190,78 +1190,194 @@ function renderIndex(): string {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Thaumacord Prototype</title>
+  <title>Thaumacord Demo</title>
   <style>
-    body { margin: 0; font-family: Arial, sans-serif; background: #111315; color: #eee; }
-    main { max-width: 1100px; margin: 0 auto; padding: 24px; }
-    h1 { margin: 0 0 6px; font-size: 34px; }
-    h2 { margin-top: 28px; color: #f1c76a; }
-    section { border: 1px solid #33383f; border-radius: 8px; padding: 16px; margin: 16px 0; background: #181b1f; }
-    label { display: block; margin: 10px 0 4px; color: #c8ccd1; }
-    input, select, button { font: inherit; border-radius: 6px; border: 1px solid #464d56; padding: 10px; }
-    input, select { width: 100%; box-sizing: border-box; background: #0d0f11; color: #eee; }
-    button { background: #7c2f2f; color: white; cursor: pointer; margin-top: 12px; }
-    button.secondary { background: #2e4257; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
-    pre { white-space: pre-wrap; background: #0d0f11; padding: 12px; border-radius: 6px; overflow: auto; }
-    .muted { color: #9da5ad; }
-    .pill { display: inline-block; padding: 4px 8px; border: 1px solid #555; border-radius: 999px; margin: 2px; }
+    :root { color-scheme: dark; --bg: #101214; --panel: #181b1f; --line: #343a42; --ink: #f2f4f5; --muted: #aab2bb; --accent: #b94b42; --blue: #315875; --green: #3f6b4d; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, sans-serif; background: var(--bg); color: var(--ink); }
+    main { width: min(1440px, 100%); margin: 0 auto; padding: 20px; }
+    h1 { margin: 0; font-size: 28px; font-weight: 700; }
+    h2 { margin: 0 0 12px; font-size: 17px; }
+    h3 { margin: 12px 0 8px; font-size: 14px; color: var(--muted); }
+    section { border: 1px solid var(--line); border-radius: 8px; padding: 14px; background: var(--panel); min-width: 0; }
+    label { display: block; margin: 8px 0 4px; color: var(--muted); font-size: 13px; }
+    input, select, button, textarea { font: inherit; border-radius: 6px; border: 1px solid #4b535d; padding: 9px; }
+    input, select, textarea { width: 100%; background: #0d0f11; color: var(--ink); }
+    textarea { min-height: 72px; resize: vertical; }
+    button { background: var(--accent); color: white; cursor: pointer; margin-top: 10px; min-height: 40px; }
+    button.secondary { background: var(--blue); }
+    button.neutral { background: #30363d; }
+    button.success { background: var(--green); }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+    .layout { display: grid; grid-template-columns: 360px 1fr; gap: 16px; align-items: start; }
+    .stack { display: grid; gap: 16px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .pill { display: inline-block; padding: 4px 8px; border: 1px solid #59616b; border-radius: 999px; margin: 2px; font-size: 12px; color: #dce1e6; }
+    .muted { color: var(--muted); }
+    .list { display: grid; gap: 8px; }
+    .item { border: 1px solid #2f353c; border-radius: 8px; padding: 10px; background: #111417; }
+    .item strong { display: block; margin-bottom: 4px; }
+    pre { white-space: pre-wrap; background: #0d0f11; padding: 12px; border-radius: 6px; overflow: auto; max-height: 420px; }
+    .error { color: #ffb1a8; min-height: 20px; }
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .topbar { align-items: flex-start; flex-direction: column; } }
   </style>
 </head>
 <body>
   <main>
-    <h1>Thaumacord</h1>
-    <p class="muted">Prototype de transmission : modules, sessions, appareils, participants, evenements, etat synchronise.</p>
-    <div class="grid">
-      <section>
-        <h2>1. Creer une partie</h2>
+    <div class="topbar">
+      <div>
+        <h1>Thaumacord</h1>
+        <div class="muted">Putsch au Panador core</div>
+      </div>
+      <div id="summary"></div>
+    </div>
+
+    <div class="layout">
+      <div class="stack">
+        <section>
+          <h2>Session</h2>
         <label for="module">Module</label>
         <select id="module"></select>
-        <button id="create">Creer la session</button>
-      </section>
-      <section>
-        <h2>2. Connecter un appareil</h2>
+          <div class="actions">
+            <button id="create">Creer</button>
+            <button id="seed" class="success">Scenario 4 joueurs</button>
+            <button id="refresh" class="secondary">Rafraichir</button>
+          </div>
         <label for="code">Code session</label>
         <input id="code" placeholder="ABC123" />
-        <label for="deviceName">Nom appareil</label>
-        <input id="deviceName" placeholder="Telephone Phil" />
-        <button id="join">Enregistrer appareil + participant</button>
-      </section>
-      <section>
-        <h2>3. Piloter</h2>
-        <button id="advance" class="secondary">Phase suivante</button>
-        <button id="refresh" class="secondary">Rafraichir</button>
-      </section>
+          <div class="error" id="error"></div>
+        </section>
+
+        <section>
+          <h2>Participant</h2>
+          <label for="participantName">Nom</label>
+          <input id="participantName" placeholder="Ana" />
+          <label for="roleId">Role</label>
+          <select id="roleId"></select>
+          <button id="createParticipant">Creer participant</button>
+
+          <label for="deviceName">Appareil</label>
+          <input id="deviceName" placeholder="Telephone Ana" />
+          <button id="createDevice" class="secondary">Creer appareil</button>
+
+          <label for="bindDeviceId">Appareil a lier</label>
+          <select id="bindDeviceId"></select>
+          <label for="bindParticipantId">Participant</label>
+          <select id="bindParticipantId"></select>
+          <button id="bind" class="secondary">Lier</button>
+        </section>
+
+        <section>
+          <h2>Echange</h2>
+          <label for="exchangeFrom">Depuis</label>
+          <select id="exchangeFrom"></select>
+          <label for="exchangeTo">Vers</label>
+          <select id="exchangeTo"></select>
+          <div class="row">
+            <div>
+              <label for="exchangeResource">Ressource</label>
+              <select id="exchangeResource"></select>
+            </div>
+            <div>
+              <label for="exchangeAmount">Quantite</label>
+              <input id="exchangeAmount" type="number" min="1" value="1" />
+            </div>
+          </div>
+          <button id="exchange" class="success">Transferer</button>
+        </section>
+
+        <section>
+          <h2>Facilitateur</h2>
+          <label for="messageTarget">Cible</label>
+          <select id="messageTarget"></select>
+          <label for="messageText">Message</label>
+          <textarea id="messageText">Le marche ouvre.</textarea>
+          <button id="sendMessage">Envoyer</button>
+
+          <h3>Correction</h3>
+          <label for="resourceParticipant">Participant</label>
+          <select id="resourceParticipant"></select>
+          <div class="row">
+            <div>
+              <label for="resourceId">Ressource</label>
+              <select id="resourceId"></select>
+            </div>
+            <div>
+              <label for="resourceValue">Valeur</label>
+              <input id="resourceValue" type="number" value="0" />
+            </div>
+          </div>
+          <button id="setResource" class="neutral">Corriger</button>
+          <button id="advance" class="secondary">Phase suivante</button>
+        </section>
+      </div>
+
+      <div class="stack">
+        <section>
+          <h2>Table</h2>
+          <div class="grid">
+            <div>
+              <h3>Participants</h3>
+              <div id="participants" class="list"></div>
+            </div>
+            <div>
+              <h3>Appareils</h3>
+              <div id="devices" class="list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Suivi</h2>
+          <div class="grid">
+            <div>
+              <h3>Agregats</h3>
+              <pre id="aggregates">{}</pre>
+            </div>
+            <div>
+              <h3>Messages</h3>
+              <div id="messages" class="list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Audit</h2>
+          <pre id="audit">[]</pre>
+        </section>
+
+        <section>
+          <h2>Etat brut</h2>
+          <pre id="state">Aucune session chargee.</pre>
+        </section>
+      </div>
     </div>
-    <section>
-      <h2>Etat</h2>
-      <div id="summary"></div>
-      <pre id="state">Aucune session chargee.</pre>
-    </section>
-    <section>
-      <h2>Live</h2>
-      <pre id="live">Aucun flux connecte.</pre>
-    </section>
   </main>
   <script>
     let sessionCode = "";
+    let currentSession;
     let liveSocket;
+    const demoPlayers = [
+      { name: "Ana", roleId: "general" },
+      { name: "Basile", roleId: "dealer" },
+      { name: "Carmen", roleId: "general" },
+      { name: "Diego", roleId: "dealer" }
+    ];
+    function byId(id) { return document.querySelector("#" + id); }
+    function setError(message) { byId("error").textContent = message || ""; }
+    function option(value, label) { return '<option value="' + value + '">' + label + '</option>'; }
     function connectLive(code) {
       if (liveSocket) liveSocket.close();
       const protocol = location.protocol === "https:" ? "wss" : "ws";
       liveSocket = new WebSocket(protocol + "://" + location.host + "/sessions/" + code + "/live?dashboard=true");
-      liveSocket.addEventListener("open", () => {
-        document.querySelector("#live").textContent = "Flux connecte pour " + code;
-      });
       liveSocket.addEventListener("message", async (event) => {
         const data = JSON.parse(event.data);
-        document.querySelector("#live").textContent = JSON.stringify(data, null, 2);
         if (data.readModel) {
-          document.querySelector("#state").textContent = JSON.stringify(data.readModel, null, 2);
+          render(data.readModel);
         }
-      });
-      liveSocket.addEventListener("close", () => {
-        document.querySelector("#live").textContent += "\\nFlux ferme.";
       });
     }
     async function api(url, options) {
@@ -1269,46 +1385,131 @@ function renderIndex(): string {
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
+    async function run(action) {
+      try {
+        setError("");
+        await action();
+      } catch (error) {
+        setError(error.message);
+      }
+    }
     async function loadModules() {
       const list = await api("/modules");
-      document.querySelector("#module").innerHTML = list.map((m) => '<option value="' + m.id + '">' + m.name + '</option>').join("");
+      byId("module").innerHTML = list.map((m) => option(m.id, m.name)).join("");
+      byId("module").value = "putsch-lite";
+      await loadModuleDetails("putsch-lite");
+    }
+    async function loadModuleDetails(moduleId) {
+      const module = await api("/modules/" + moduleId);
+      byId("roleId").innerHTML = module.roles.map((role) => option(role.id, role.name)).join("");
+      byId("exchangeResource").innerHTML = module.resources.map((resource) => option(resource.id, resource.name)).join("");
+      byId("resourceId").innerHTML = module.resources.map((resource) => option(resource.id, resource.name)).join("");
     }
     async function refresh() {
-      const code = document.querySelector("#code").value || sessionCode;
+      const code = byId("code").value || sessionCode;
       if (!code) return;
-      const session = await api("/sessions/" + code);
+      const session = await api("/sessions/" + code + "/read-models/dashboard");
+      render(session);
+    }
+    function render(session) {
+      currentSession = session;
       sessionCode = session.code;
-      document.querySelector("#code").value = session.code;
-      document.querySelector("#summary").innerHTML = [
+      byId("code").value = session.code;
+      byId("summary").innerHTML = [
         '<span class="pill">Code ' + session.code + '</span>',
         '<span class="pill">' + session.module.name + '</span>',
         '<span class="pill">Phase ' + session.phase.name + '</span>',
         '<span class="pill">' + session.devices.length + ' appareil(s)</span>',
         '<span class="pill">' + session.participants.length + ' participant(s)</span>'
       ].join(" ");
-      document.querySelector("#state").textContent = JSON.stringify(session, null, 2);
+      byId("participants").innerHTML = session.participants.map((participant) => {
+        const resources = Object.entries(participant.resources).map(([key, value]) => key + ": " + value).join(" / ");
+        return '<div class="item"><strong>' + participant.name + '</strong><div>' + (participant.roleId || "sans role") + '</div><div class="muted">' + resources + '</div></div>';
+      }).join("") || '<div class="muted">Aucun participant</div>';
+      byId("devices").innerHTML = session.devices.map((device) => {
+        const participant = session.participants.find((candidate) => candidate.id === device.participantId);
+        return '<div class="item"><strong>' + device.name + '</strong><div>' + (participant ? participant.name : "non lie") + '</div><div class="muted">' + (device.connected ? "connecte" : "deconnecte") + '</div></div>';
+      }).join("") || '<div class="muted">Aucun appareil</div>';
+      byId("aggregates").textContent = JSON.stringify(session.aggregates || {}, null, 2);
+      byId("messages").innerHTML = (session.messages || []).slice(-6).map((message) => '<div class="item"><strong>' + message.channel + '</strong><div>' + message.text + '</div><div class="muted">' + message.target + '</div></div>').join("") || '<div class="muted">Aucun message</div>';
+      byId("audit").textContent = JSON.stringify((session.audit || []).slice(-12), null, 2);
+      byId("state").textContent = JSON.stringify(session, null, 2);
+      syncSelectors(session);
     }
-    document.querySelector("#create").addEventListener("click", async () => {
-      const moduleId = document.querySelector("#module").value;
+    function syncSelectors(session) {
+      const participantOptions = session.participants.map((participant) => option(participant.id, participant.name)).join("");
+      const messageOptions = option("allParticipants", "Tous") + option("dashboard", "Dashboard") + session.participants.map((participant) => option("participant:" + participant.id, participant.name)).join("");
+      byId("bindParticipantId").innerHTML = participantOptions;
+      byId("exchangeFrom").innerHTML = participantOptions;
+      byId("exchangeTo").innerHTML = participantOptions;
+      byId("resourceParticipant").innerHTML = participantOptions;
+      byId("messageTarget").innerHTML = messageOptions;
+      byId("bindDeviceId").innerHTML = session.devices.map((device) => option(device.id, device.name + (device.participantId ? " (lie)" : ""))).join("");
+    }
+    byId("module").addEventListener("change", async () => loadModuleDetails(byId("module").value));
+    byId("create").addEventListener("click", () => run(async () => {
+      const moduleId = byId("module").value;
       const session = await api("/sessions", { method: "POST", body: JSON.stringify({ moduleId }) });
       sessionCode = session.code;
-      document.querySelector("#code").value = session.code;
+      byId("code").value = session.code;
       connectLive(session.code);
+      render(session);
+    }));
+    byId("seed").addEventListener("click", () => run(async () => {
+      byId("module").value = "putsch-lite";
+      await loadModuleDetails("putsch-lite");
+      const session = await api("/sessions", { method: "POST", body: JSON.stringify({ moduleId: "putsch-lite" }) });
+      sessionCode = session.code;
+      byId("code").value = session.code;
+      connectLive(session.code);
+      for (const player of demoPlayers) {
+        const participant = await api("/sessions/" + session.code + "/participants", { method: "POST", body: JSON.stringify({ name: player.name, roleId: player.roleId }) });
+        const device = await api("/sessions/" + session.code + "/devices", { method: "POST", body: JSON.stringify({ name: "Telephone " + player.name }) });
+        await api("/sessions/" + session.code + "/devices/" + device.device.id + "/bind", { method: "POST", body: JSON.stringify({ participantId: participant.participant.id }) });
+      }
+      await api("/sessions/" + session.code + "/messages", { method: "POST", body: JSON.stringify({ target: "allParticipants", channel: "demo", text: "Le marche ouvre." }) });
       await refresh();
-    });
-    document.querySelector("#join").addEventListener("click", async () => {
-      const code = document.querySelector("#code").value;
-      const name = document.querySelector("#deviceName").value;
-      await api("/sessions/" + code + "/join", { method: "POST", body: JSON.stringify({ name }) });
-      document.querySelector("#deviceName").value = "";
+    }));
+    byId("createParticipant").addEventListener("click", () => run(async () => {
+      await api("/sessions/" + sessionCode + "/participants", { method: "POST", body: JSON.stringify({ name: byId("participantName").value, roleId: byId("roleId").value }) });
+      byId("participantName").value = "";
       await refresh();
-    });
-    document.querySelector("#advance").addEventListener("click", async () => {
-      const code = document.querySelector("#code").value || sessionCode;
+    }));
+    byId("createDevice").addEventListener("click", () => run(async () => {
+      await api("/sessions/" + sessionCode + "/devices", { method: "POST", body: JSON.stringify({ name: byId("deviceName").value }) });
+      byId("deviceName").value = "";
+      await refresh();
+    }));
+    byId("bind").addEventListener("click", () => run(async () => {
+      await api("/sessions/" + sessionCode + "/devices/" + byId("bindDeviceId").value + "/bind", { method: "POST", body: JSON.stringify({ participantId: byId("bindParticipantId").value }) });
+      await refresh();
+    }));
+    byId("exchange").addEventListener("click", () => run(async () => {
+      await api("/sessions/" + sessionCode + "/exchanges", { method: "POST", body: JSON.stringify({
+        fromParticipantId: byId("exchangeFrom").value,
+        toParticipantId: byId("exchangeTo").value,
+        resources: { [byId("exchangeResource").value]: Number(byId("exchangeAmount").value) }
+      }) });
+      await refresh();
+    }));
+    byId("sendMessage").addEventListener("click", () => run(async () => {
+      const selected = byId("messageTarget").value;
+      const payload = selected.startsWith("participant:")
+        ? { target: "participant", participantId: selected.slice("participant:".length), text: byId("messageText").value, channel: "facilitator" }
+        : { target: selected, text: byId("messageText").value, channel: "facilitator" };
+      await api("/sessions/" + sessionCode + "/messages", { method: "POST", body: JSON.stringify(payload) });
+      await refresh();
+    }));
+    byId("setResource").addEventListener("click", () => run(async () => {
+      await api("/sessions/" + sessionCode + "/players/" + byId("resourceParticipant").value + "/resources", { method: "POST", body: JSON.stringify({ resourceId: byId("resourceId").value, value: Number(byId("resourceValue").value) }) });
+      await refresh();
+    }));
+    byId("advance").addEventListener("click", () => run(async () => {
+      const code = byId("code").value || sessionCode;
       await api("/sessions/" + code + "/phases/advance", { method: "POST", body: JSON.stringify({}) });
       await refresh();
-    });
-    document.querySelector("#refresh").addEventListener("click", refresh);
+    }));
+    byId("refresh").addEventListener("click", () => run(refresh));
     loadModules();
   </script>
 </body>

@@ -106,6 +106,16 @@ after(async () => {
   await app.close();
 });
 
+test("serves a one-page Putsch core demo dashboard", async () => {
+  const response = await app.inject({ method: "GET", url: "/" });
+
+  assert.equal(response.statusCode, 200);
+  assert.match(response.body, /Putsch au Panador core/);
+  assert.match(response.body, /Scenario 4 joueurs/);
+  assert.match(response.body, /Transferer/);
+  assert.match(response.body, /Corriger/);
+});
+
 test("loads module mechanics and links actions to them", async () => {
   const modules = await injectJson("GET", "/modules");
   const putschSummary = modules.find((module: JsonObject) => module.id === "putsch-lite");
