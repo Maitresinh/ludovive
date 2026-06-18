@@ -1867,7 +1867,7 @@ function renderIndex(): string {
           <div id="sessionRoles" class="list"></div>
           <div id="injectionAuthorityNotice" class="muted"></div>
 
-          <h3>Scenes live</h3>
+          <h3>Scenes guidees</h3>
           <div id="liveScenes" class="list"></div>
 
           <h3>Correction</h3>
@@ -2066,7 +2066,8 @@ function renderIndex(): string {
       const actions = (session.module.actions || []).filter((action) => {
         if (action.phase !== "*" && action.phase !== session.phase.id) return false;
         const mechanic = (session.module.mechanics || []).find((candidate) => candidate.id === action.mechanicId);
-        return mechanic && (mechanic.family === "live-administration" || mechanic.resolution?.mode === "liveThenRecord");
+        const modes = Array.isArray(mechanic?.resolution?.modes) ? mechanic.resolution.modes : [mechanic?.resolution?.mode].filter(Boolean);
+        return mechanic && (mechanic.family === "live-administration" || modes.includes("liveThenRecord") || modes.includes("guidedInApp"));
       });
       return actions.map((action) => {
         const mechanic = (session.module.mechanics || []).find((candidate) => candidate.id === action.mechanicId) || {};
@@ -2075,8 +2076,8 @@ function renderIndex(): string {
         const controls = (mechanic.inputs || []).map((input) => dashboardActionInputControl(session, input)).join("");
         const disabled = actors.length === 0 ? " disabled" : "";
         const hint = actors.length === 0 ? '<div class="muted">Aucun acteur autorise dans cette phase.</div>' : "";
-        return '<div class="item liveSceneCard"><strong>' + action.name + '</strong><div class="muted">' + (mechanic.summary || action.fallback || action.id) + '</div>' + hint + '<label>Acteur qui enregistre</label><select data-live-actor>' + actorOptions + '</select>' + controls + '<button class="secondary recordLiveScene" data-action-id="' + action.id + '"' + disabled + '>Enregistrer resultat</button></div>';
-      }).join("") || '<div class="muted">Aucune scene live a enregistrer dans cette phase</div>';
+        return '<div class="item liveSceneCard"><strong>' + action.name + '</strong><div class="muted">' + (mechanic.summary || action.fallback || action.id) + '</div>' + hint + '<label>Acteur qui conduit</label><select data-live-actor>' + actorOptions + '</select>' + controls + '<button class="secondary recordLiveScene" data-action-id="' + action.id + '"' + disabled + '>Valider la scene</button></div>';
+      }).join("") || '<div class="muted">Aucune scene guidee dans cette phase</div>';
     }
     function formatClock(clock) {
       if (!clock) return "sans minuteur";

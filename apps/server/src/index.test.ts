@@ -151,12 +151,12 @@ test("serves a one-page Putsch core demo dashboard", async () => {
   assert.match(response.body, /injectionAuthorityNotice/);
   assert.match(response.body, /hasDashboardInjectionAuthority/);
   assert.match(response.body, /Casquette d'injection requise/);
-  assert.match(response.body, /Scenes live/);
+  assert.match(response.body, /Scenes guidees/);
   assert.match(response.body, /id="liveScenes"/);
   assert.match(response.body, /renderLiveSceneActions/);
   assert.match(response.body, /collectLiveScenePayload/);
   assert.match(response.body, /recordLiveScene/);
-  assert.match(response.body, /Enregistrer resultat/);
+  assert.match(response.body, /Valider la scene/);
   assert.match(response.body, /Resolutions/);
   assert.match(response.body, /recommendedOutcomes/);
   assert.match(response.body, /data-outcome/);
@@ -336,7 +336,8 @@ test("loads module mechanics and links actions to them", async () => {
   assert.equal(king.roles.find((role: JsonObject) => role.id === "king").name, "Roi");
   assert.equal(king.sessionRoles.find((role: JsonObject) => role.id === "game-authority").defaultRoleId, "king");
   assert.equal(king.mechanics.find((mechanic: JsonObject) => mechanic.id === "audience-income").family, "timed-income");
-  assert.equal(king.mechanics.find((mechanic: JsonObject) => mechanic.id === "audience-income").resolution.mode, "liveThenRecord");
+  assert.equal(king.mechanics.find((mechanic: JsonObject) => mechanic.id === "audience-income").resolution.mode, "guidedInApp");
+  assert.deepEqual(king.mechanics.find((mechanic: JsonObject) => mechanic.id === "audience-income").resolution.modes, ["guidedInApp", "liveThenRecord"]);
   assert.equal(king.actions.find((action: JsonObject) => action.id === "hold-audience").mechanicId, "audience-income");
   assert.equal(putsch.actions.find((action: JsonObject) => action.id === "embezzle-council-funds").phase, "first-council");
   assert.equal(putsch.actions.find((action: JsonObject) => action.id === "embezzle-council-funds").effect.delta, 5000);

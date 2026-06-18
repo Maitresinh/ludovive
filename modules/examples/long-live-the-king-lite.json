@@ -168,7 +168,8 @@
       ],
       "resolution": {
         "type": "facilitatorDistribution",
-        "mode": "liveThenRecord",
+        "mode": "guidedInApp",
+        "modes": ["guidedInApp", "liveThenRecord"],
         "recordedBy": "king-or-chamberlain",
         "incomeResource": "gold",
         "intrigueCardsOddTurns": 1,
