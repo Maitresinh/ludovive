@@ -143,6 +143,10 @@ test("serves a one-page Putsch core demo dashboard", async () => {
   assert.match(response.body, /player.sessionRoleId/);
   assert.match(response.body, /Transferer/);
   assert.match(response.body, /Echanges/);
+  assert.match(response.body, /Controles de jeu/);
+  assert.match(response.body, /id="gameControls"/);
+  assert.match(response.body, /renderGameControls/);
+  assert.match(response.body, /performGameAction/);
   assert.match(response.body, /Corriger/);
   assert.match(response.body, /Attribuer role/);
   assert.match(response.body, /Casquette de session/);
@@ -970,6 +974,28 @@ test("applies immediate exchange actions from participant payloads", async () =>
 
   const generalModel = await injectJson("GET", `/sessions/${code}/read-models/device/${generalDevice.device.id}`);
   assert.equal(generalModel.exchanges.length, 1);
+});
+
+test("lets the dashboard trigger phase game controls on behalf of an actor", async () => {
+  const session = await createSession("putsch-lite");
+  const code = session.code;
+  const general = await createParticipant(code, "General", "general");
+  const dealer = await createParticipant(code, "Marchand", "dealer");
+
+  const transfer = await injectJson("POST", `/sessions/${code}/events`, {
+    type: "action.triggered",
+    actionId: "sell-weapons",
+    participantId: general.participant.id,
+    payload: {
+      toParticipantId: dealer.participant.id,
+      resources: { weapons: 1 }
+    }
+  });
+
+  assert.equal(transfer.accepted, true);
+  assert.equal(transfer.actionResult.effect.type, "exchange");
+  assert.equal(transfer.dashboard.participants.find((candidate: JsonObject) => candidate.id === general.participant.id).resources.weapons, 1);
+  assert.equal(transfer.dashboard.participants.find((candidate: JsonObject) => candidate.id === dealer.participant.id).resources.weapons, 2);
 });
 
 test("rejects immediate exchange actions with invalid payloads", async () => {

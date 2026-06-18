@@ -1891,6 +1891,11 @@ function renderIndex(): string {
         </section>
 
         <section>
+          <h2>Controles de jeu</h2>
+          <div id="gameControls" class="list"></div>
+        </section>
+
+        <section>
           <h2>Facilitateur</h2>
           <label for="messageTarget">Cible</label>
           <select id="messageTarget"></select>
@@ -2155,22 +2160,37 @@ function renderIndex(): string {
     function dashboardActorMatches(action, participant) {
       return action.actor === "any" || participant.roleId === action.actor;
     }
+    function dashboardActionModes(mechanic) {
+      return Array.isArray(mechanic?.resolution?.modes) ? mechanic.resolution.modes : [mechanic?.resolution?.mode].filter(Boolean);
+    }
+    function isGuidedSceneMechanic(mechanic) {
+      const modes = dashboardActionModes(mechanic);
+      return mechanic && (mechanic.family === "live-administration" || modes.includes("liveThenRecord") || modes.includes("guidedInApp"));
+    }
+    function renderDashboardActionCard(session, action, cssClass, buttonClass, buttonLabel) {
+      const mechanic = (session.module.mechanics || []).find((candidate) => candidate.id === action.mechanicId) || {};
+      const actors = session.participants.filter((participant) => dashboardActorMatches(action, participant));
+      const actorOptions = actors.map((participant) => option(participant.id, participant.name + " (" + dashboardRoleLabel(session, participant.roleId) + ")")).join("");
+      const controls = (mechanic.inputs || []).map((input) => dashboardActionInputControl(session, input)).join("");
+      const disabled = actors.length === 0 ? " disabled" : "";
+      const hint = actors.length === 0 ? '<div class="muted">Aucun acteur autorise dans cette phase.</div>' : "";
+      return '<div class="item ' + cssClass + '"><strong>' + action.name + '</strong><div class="muted">' + (mechanic.summary || action.fallback || action.id) + '</div>' + hint + '<label>Acteur</label><select data-live-actor>' + actorOptions + '</select>' + controls + '<button class="secondary ' + buttonClass + '" data-action-id="' + action.id + '"' + disabled + '>' + buttonLabel + '</button></div>';
+    }
+    function renderGameControls(session) {
+      const actions = (session.module.actions || []).filter((action) => {
+        if (action.phase !== "*" && action.phase !== session.phase.id) return false;
+        const mechanic = (session.module.mechanics || []).find((candidate) => candidate.id === action.mechanicId);
+        return !isGuidedSceneMechanic(mechanic);
+      });
+      return actions.map((action) => renderDashboardActionCard(session, action, "gameControlCard", "performGameAction", "Declencher")).join("") || '<div class="muted">Aucun controle de jeu dans cette phase</div>';
+    }
     function renderLiveSceneActions(session) {
       const actions = (session.module.actions || []).filter((action) => {
         if (action.phase !== "*" && action.phase !== session.phase.id) return false;
         const mechanic = (session.module.mechanics || []).find((candidate) => candidate.id === action.mechanicId);
-        const modes = Array.isArray(mechanic?.resolution?.modes) ? mechanic.resolution.modes : [mechanic?.resolution?.mode].filter(Boolean);
-        return mechanic && (mechanic.family === "live-administration" || modes.includes("liveThenRecord") || modes.includes("guidedInApp"));
+        return isGuidedSceneMechanic(mechanic);
       });
-      return actions.map((action) => {
-        const mechanic = (session.module.mechanics || []).find((candidate) => candidate.id === action.mechanicId) || {};
-        const actors = session.participants.filter((participant) => dashboardActorMatches(action, participant));
-        const actorOptions = actors.map((participant) => option(participant.id, participant.name + " (" + dashboardRoleLabel(session, participant.roleId) + ")")).join("");
-        const controls = (mechanic.inputs || []).map((input) => dashboardActionInputControl(session, input)).join("");
-        const disabled = actors.length === 0 ? " disabled" : "";
-        const hint = actors.length === 0 ? '<div class="muted">Aucun acteur autorise dans cette phase.</div>' : "";
-        return '<div class="item liveSceneCard"><strong>' + action.name + '</strong><div class="muted">' + (mechanic.summary || action.fallback || action.id) + '</div>' + hint + '<label>Acteur qui conduit</label><select data-live-actor>' + actorOptions + '</select>' + controls + '<button class="secondary recordLiveScene" data-action-id="' + action.id + '"' + disabled + '>Valider la scene</button></div>';
-      }).join("") || '<div class="muted">Aucune scene guidee dans cette phase</div>';
+      return actions.map((action) => renderDashboardActionCard(session, action, "liveSceneCard", "recordLiveScene", "Valider la scene")).join("") || '<div class="muted">Aucune scene guidee dans cette phase</div>';
     }
     function formatClock(clock) {
       if (!clock) return "sans minuteur";
@@ -2255,6 +2275,7 @@ function renderIndex(): string {
         return '<div class="item"><strong>' + (from ? from.name : "source inconnue") + ' -> ' + (to ? to.name : "cible inconnue") + '</strong><div>' + resources + '</div><div class="muted">' + exchange.status + '</div></div>';
       }).join("") || '<div class="muted">Aucun echange</div>';
       byId("sessionRoles").innerHTML = renderSessionRoles(session);
+      byId("gameControls").innerHTML = renderGameControls(session);
       byId("liveScenes").innerHTML = renderLiveSceneActions(session);
       byId("pendingResolutions").innerHTML = (session.pendingResolutions || []).map((resolution) => {
         const participant = session.participants.find((candidate) => candidate.id === resolution.participantId);
@@ -2408,6 +2429,18 @@ function renderIndex(): string {
       const body = { outcome: button.dataset.outcome || "facilitator-resolved", payload: collectResolutionPayload(card) };
       if (note) body.note = note;
       await api("/sessions/" + sessionCode + "/resolutions/" + button.dataset.resolutionId + "/resolve", { method: "POST", body: JSON.stringify(body) });
+      await refresh();
+    }));
+    byId("gameControls").addEventListener("click", (event) => run(async () => {
+      const button = event.target.closest(".performGameAction");
+      if (!button) return;
+      const card = button.closest(".gameControlCard");
+      await api("/sessions/" + sessionCode + "/events", { method: "POST", body: JSON.stringify({
+        type: "action.triggered",
+        actionId: button.dataset.actionId,
+        participantId: card.querySelector("[data-live-actor]")?.value,
+        payload: collectLiveScenePayload(card)
+      }) });
       await refresh();
     }));
     byId("liveScenes").addEventListener("click", (event) => run(async () => {
