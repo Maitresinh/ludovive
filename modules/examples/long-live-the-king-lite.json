@@ -7,13 +7,23 @@
     "turnCount": 7,
     "durationPolicy": "facilitator-controlled",
     "setupPhaseId": "setup",
-    "convergencePhaseId": "audience",
+    "turnPhases": ["audience", "diplomacy", "council"],
+    "convergencePhaseId": "council",
     "decisionPhaseId": "council",
-    "notes": "La diplomatie, les cartes, les faveurs et les petitions convergent vers l'audience du roi et la sequence de conseil."
+    "notes": "Chaque tour suit Audience, Diplomatie, Conseil. L'Audience distribue revenus et cartes d'intrigue; le Conseil tranche les petitions. Le dernier conseil ne peut pas etre manque par le roi."
+  },
+  "state": {
+    "currentTurn": 1,
+    "kingHealthy": true,
+    "activeHealthCards": 0,
+    "healthCardsInLine": 6,
+    "activeMobilization": 0,
+    "activeRebellion": 0,
+    "dungeonOpenPetitionsDue": false
   },
   "players": {
-    "min": 4,
-    "max": 7
+    "min": 6,
+    "max": 8
   },
   "resources": [
     { "id": "gold", "name": "Ducats d'or", "visibility": "private", "min": 0 },
@@ -24,10 +34,36 @@
     { "id": "setup", "name": "Mise en place", "durationSeconds": 300 },
     { "id": "audience", "name": "Audience", "durationSeconds": 180 },
     { "id": "diplomacy", "name": "Diplomatie", "durationSeconds": 900 },
-    { "id": "council", "name": "Conseil", "durationSeconds": 420 },
-    { "id": "archive", "name": "Archivage", "durationSeconds": 120 }
+    { "id": "council", "name": "Conseil", "durationSeconds": 420 }
+  ],
+  "sessionRoles": [
+    {
+      "id": "host",
+      "name": "Hote de cour",
+      "description": "Ouvre la session, assigne les roles et garde le rythme des sept tours.",
+      "capabilities": ["session.host", "participants.manage", "roles.assign", "phase.control"],
+      "canInjectGameElements": false,
+      "assignableToRoles": ["king"],
+      "defaultRoleId": "king"
+    },
+    {
+      "id": "game-authority",
+      "name": "Roi ou conseiller",
+      "description": "Controle les audiences, le tresor, les paquets de cartes, les decisions de conseil et les arbitrages.",
+      "capabilities": ["resources.adjust", "components.draw", "messages.send", "resolutions.override", "phase.control"],
+      "canInjectGameElements": true,
+      "assignableToRoles": ["king"],
+      "defaultRoleId": "king"
+    }
   ],
   "roles": [
+    {
+      "id": "king",
+      "name": "Roi",
+      "startingResources": {},
+      "responsibilities": ["Diriger la session", "Tenir les audiences", "Arbitrer les petitions", "Gerer les cartes et le tresor"],
+      "victoryCondition": { "type": "text", "text": "Role d'autorite et de rythme; ne suit pas les objectifs des courtisans principaux." }
+    },
     {
       "id": "queen",
       "name": "Reine",
@@ -45,13 +81,37 @@
       "name": "Tresorier",
       "startingResources": { "gold": 7, "favor": 7, "status": 1 },
       "victoryCondition": { "type": "text", "text": "Gagne avec un heritier et plus de statut que tous les autres joueurs." }
+    },
+    {
+      "id": "bastard-heir",
+      "name": "Batard royal",
+      "startingResources": {},
+      "victoryCondition": { "type": "text", "text": "Detail issu du tableur de roles; gagne selon sa position d'heritier." }
+    },
+    {
+      "id": "archbishop",
+      "name": "Archeveque",
+      "startingResources": {},
+      "victoryCondition": { "type": "text", "text": "Detail issu du tableur de roles; manipule la succession et les alliances." }
+    },
+    {
+      "id": "ambassador",
+      "name": "Ambassadeur",
+      "startingResources": {},
+      "victoryCondition": { "type": "text", "text": "Detail issu du tableur de roles; soutient les troubles et la rebellion." }
+    },
+    {
+      "id": "steward",
+      "name": "Mayordome majeur",
+      "startingResources": {},
+      "victoryCondition": { "type": "text", "text": "Detail issu du tableur de roles; peut profiter d'une regence sans successeur clair." }
     }
   ],
   "components": [
     { "id": "intrigue-card", "name": "Carte Intrigue", "kind": "card", "count": 80, "visibility": "private", "tags": ["deck", "hand"] },
     { "id": "status-card", "name": "Carte Statut", "kind": "card", "count": 32, "visibility": "private", "tags": ["status", "character"] },
     { "id": "decision-card", "name": "Carte Decision", "kind": "card", "count": 22, "visibility": "facilitator", "tags": ["deck", "petition"] },
-    { "id": "health-card", "name": "Carte Sante du roi", "kind": "card", "count": 7, "visibility": "facilitator", "tags": ["deck", "timeline"] },
+    { "id": "health-card", "name": "Carte Sante du roi", "kind": "card", "count": 10, "visibility": "facilitator", "tags": ["deck", "timeline"] },
     { "id": "mobilization-card", "name": "Carte Mobilisation", "kind": "card", "count": 5, "visibility": "public", "tags": ["track"] },
     { "id": "rebellion-card", "name": "Carte Rebellion", "kind": "card", "count": 5, "visibility": "public", "tags": ["track"] }
   ],
@@ -59,12 +119,14 @@
     "phaseId": "setup",
     "instructions": [
       "Assigner les roles et les personnages.",
-      "Distribuer les cartes initiales.",
-      "Preparer les paquets Decision et Sante du roi.",
+      "Distribuer deux cartes Intrigue initiales a chaque courtisan principal.",
+      "Distribuer les cartes Statut selon le statut de depart indique par le tableur.",
+      "Melanger les 10 cartes Sante et en aligner 6 avec les pistes Mobilisation et Rebellion.",
+      "Preparer le paquet Decision pour le Conseil.",
       "Verifier les ressources de depart avant la premiere audience."
     ],
     "distributions": [
-      { "id": "initial-intrigue", "componentId": "intrigue-card", "target": "allParticipants", "count": 1, "visibility": "private" },
+      { "id": "initial-intrigue", "componentId": "intrigue-card", "target": "allParticipants", "count": 2, "visibility": "private" },
       { "id": "initial-status", "componentId": "status-card", "target": "allParticipants", "count": 1, "visibility": "private" },
       { "id": "queen-status-bonus", "componentId": "status-card", "target": "role", "roleId": "queen", "count": 1, "visibility": "private" }
     ]
@@ -92,6 +154,55 @@
         { "id": "democratic", "name": "Vote democratique", "weightResource": null },
         { "id": "authority-only", "name": "Decision de l'autorite", "skipVotes": true },
         { "id": "delayed", "name": "Petition reportee", "resolveAtPhase": "next-council" }
+      ]
+    },
+    {
+      "id": "audience-income",
+      "name": "Audience du roi",
+      "family": "timed-income",
+      "summary": "Au debut du tour, le Roi paie les revenus, distribue les cartes Intrigue, revele la sante a partir du tour 2, et permet a chaque joueur de connaitre sa Faveur.",
+      "phases": ["audience"],
+      "inputs": [
+        { "id": "turn", "type": "session-state", "state": "currentTurn" },
+        { "id": "kingHealthy", "type": "session-state", "state": "kingHealthy" }
+      ],
+      "resolution": {
+        "type": "facilitatorDistribution",
+        "incomeResource": "gold",
+        "intrigueCardsOddTurns": 1,
+        "intrigueCardsEvenTurns": 2,
+        "queenIntrigueCardsPerTurn": 2,
+        "archbishopBonusIntrigueCards": 1,
+        "lowStatusIncomeMultiplier": 0.5,
+        "skipWhenKingSick": true
+      },
+      "visibility": { "dashboard": "full", "participants": "own-income-and-cards" },
+      "variants": [
+        { "id": "experienced-table", "name": "Sante revelee au tour 1", "revealHealthOnTurnOne": true }
+      ]
+    },
+    {
+      "id": "health-mobilization-rebellion",
+      "name": "Sante, mobilisation et rebellion",
+      "family": "track",
+      "summary": "Le Roi suit la sante, les cartes de mobilisation du Baron et les cartes de rebellion activees par l'Ambassadeur.",
+      "phases": ["audience", "council"],
+      "inputs": [
+        { "id": "activeHealthCards", "type": "session-state" },
+        { "id": "activeMobilization", "type": "session-counter" },
+        { "id": "activeRebellion", "type": "session-counter" }
+      ],
+      "resolution": {
+        "type": "publicTracks",
+        "healthCardsTotal": 10,
+        "healthCardsInLine": 6,
+        "mobilizationCards": 5,
+        "rebellionCards": 5,
+        "lastCouncilKingReturns": true
+      },
+      "visibility": { "dashboard": "full", "participants": "public-tracks" },
+      "variants": [
+        { "id": "baron-suppresses-rebellion", "name": "Mobilisation contre rebellion", "trigger": "accepted-mobilization-petition" }
       ]
     },
     {

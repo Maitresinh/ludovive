@@ -81,6 +81,16 @@ async function assignGameAuthority(code: string): Promise<JsonObject> {
   });
 }
 
+async function assignKingAuthority(code: string): Promise<JsonObject> {
+  const king = await createParticipant(code, "Le Roi", "king");
+  await injectJson("POST", `/sessions/${code}/session-roles/host`, {
+    participantId: king.participant.id
+  });
+  return injectJson("POST", `/sessions/${code}/session-roles/game-authority`, {
+    participantId: king.participant.id
+  });
+}
+
 function collectLiveMessages(url: string, expectedCount = 2): Promise<{ socket: WebSocket; messages: JsonObject[] }> {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(url);
@@ -289,6 +299,7 @@ test("loads module mechanics and links actions to them", async () => {
   assert.equal(putschSummary.sessionRoles, 2);
   assert.equal(wolfpackSummary.mechanics, 3);
   assert.equal(kingSummary.components, 6);
+  assert.equal(kingSummary.sessionRoles, 2);
   assert.equal(kingSummary.setup, true);
 
   const putsch = await injectJson("GET", "/modules/putsch-lite");
@@ -305,6 +316,12 @@ test("loads module mechanics and links actions to them", async () => {
   const wolfpack = await injectJson("GET", "/modules/wolfpack-lite");
   assert.equal(wolfpack.sessionRoles.find((role: JsonObject) => role.id === "host").defaultRoleId, "captain");
   assert.equal(wolfpack.sessionRoles.find((role: JsonObject) => role.id === "host").canInjectGameElements, false);
+  const king = await injectJson("GET", "/modules/long-live-the-king-lite");
+  assert.equal(king.state.healthCardsInLine, 6);
+  assert.equal(king.components.find((component: JsonObject) => component.id === "health-card").count, 10);
+  assert.equal(king.roles.find((role: JsonObject) => role.id === "king").name, "Roi");
+  assert.equal(king.sessionRoles.find((role: JsonObject) => role.id === "game-authority").defaultRoleId, "king");
+  assert.equal(king.mechanics.find((mechanic: JsonObject) => mechanic.id === "audience-income").family, "timed-income");
   assert.equal(putsch.actions.find((action: JsonObject) => action.id === "embezzle-council-funds").phase, "first-council");
   assert.equal(putsch.actions.find((action: JsonObject) => action.id === "embezzle-council-funds").effect.delta, 5000);
 });
@@ -575,7 +592,7 @@ test("tracks facilitator-controlled phase timing and turn cycles", async () => {
   assert.equal(session.phaseClock.phaseDurationSeconds, 300);
   assert.equal(typeof session.phaseClock.phaseEndsAt, "string");
   assert.equal(session.module.timeline.setupPhaseId, "setup");
-  assert.equal(session.module.timeline.convergencePhaseId, "audience");
+  assert.equal(session.module.timeline.convergencePhaseId, "council");
 
   const customTimer = await setPhaseTimer(code, { durationSeconds: 600 });
   assert.equal(customTimer.phaseClock.phaseId, "setup");
@@ -592,8 +609,11 @@ test("tracks facilitator-controlled phase timing and turn cycles", async () => {
   assert.equal(diplomacy.phaseClock.turn, 1);
   assert.equal(diplomacy.phaseClock.phaseDurationSeconds, 900);
 
-  await advancePhase(code);
-  await advancePhase(code);
+  const council = await advancePhase(code);
+  assert.equal(council.phase.id, "council");
+  assert.equal(council.phaseClock.turn, 1);
+  assert.equal(council.phaseClock.phaseDurationSeconds, 420);
+
   const nextSetup = await advancePhase(code);
   assert.equal(nextSetup.phase.id, "setup");
   assert.equal(nextSetup.phaseClock.turn, 2);
@@ -687,24 +707,25 @@ test("runs module setup distributions into participant inventories", async () =>
   assert.equal(body.setupResult.applied, true);
   assert.equal(body.setupResult.phaseId, "setup");
   assert.equal(body.setupResult.distributions.length, 3);
-  assert.equal(body.dashboard.componentPools["intrigue-card"].remaining, 78);
+  assert.equal(body.dashboard.componentPools["intrigue-card"].remaining, 76);
   assert.equal(body.dashboard.componentPools["status-card"].remaining, 29);
-  assert.equal(body.dashboard.aggregates.inventory["intrigue-card"], 2);
+  assert.equal(body.dashboard.aggregates.inventory["intrigue-card"], 4);
   assert.equal(body.dashboard.aggregates.inventory["status-card"], 3);
-  assert.equal(body.dashboard.aggregates.componentPools["intrigue-card"].remaining, 78);
+  assert.equal(body.dashboard.aggregates.componentPools["intrigue-card"].remaining, 76);
 
   const queenModel = await injectJson("GET", `/sessions/${code}/read-models/device/${queenDevice.device.id}`);
   const baronModel = await injectJson("GET", `/sessions/${code}/read-models/device/${baronDevice.device.id}`);
-  assert.equal(queenModel.participant.inventory["intrigue-card"], 1);
+  assert.equal(queenModel.participant.inventory["intrigue-card"], 2);
   assert.equal(queenModel.participant.inventory["status-card"], 2);
   assert.equal(queenModel.aggregates, undefined);
-  assert.equal(baronModel.participant.inventory["intrigue-card"], 1);
+  assert.equal(baronModel.participant.inventory["intrigue-card"], 2);
   assert.equal(baronModel.participant.inventory["status-card"], 1);
 });
 
 test("draws components from pools into participant inventories", async () => {
   const session = await createSession("long-live-the-king-lite");
   const code = session.code;
+  await assignKingAuthority(code);
   const device = await createDevice(code, "Telephone reine");
   const queen = await createParticipant(code, "Reine", "queen");
   await bindDevice(code, device.device.id, queen.participant.id);
@@ -733,6 +754,7 @@ test("draws components from pools into participant inventories", async () => {
 test("rejects component draws that exceed the pool", async () => {
   const session = await createSession("long-live-the-king-lite");
   const code = session.code;
+  await assignKingAuthority(code);
   const participant = await createParticipant(code, "Baron", "baron");
 
   const draw = await app.inject({
@@ -741,14 +763,14 @@ test("rejects component draws that exceed the pool", async () => {
     payload: {
       participantId: participant.participant.id,
       componentId: "health-card",
-      count: 8
+      count: 11
     }
   });
 
   assert.equal(draw.statusCode, 400);
-  assert.match(draw.json<JsonObject>().error, /only 7 remaining/);
+  assert.match(draw.json<JsonObject>().error, /only 10 remaining/);
   const dashboard = await injectJson("GET", `/sessions/${code}/read-models/dashboard`);
-  assert.equal(dashboard.componentPools["health-card"].remaining, 7);
+  assert.equal(dashboard.componentPools["health-card"].remaining, 10);
   assert.deepEqual(dashboard.participants.find((candidate: JsonObject) => candidate.id === participant.participant.id).inventory, {});
 });
 
