@@ -227,7 +227,7 @@ Supported fields in the prototype:
 
 - `id`: stable identifier used by actions through `mechanicId`;
 - `name`: table-facing name;
-- `family`: broad mechanism family such as `exchange`, `petition`, `vote`, `contest`, `coordination`, `hidden-role`, `facilitator-action`, `triggered-ability`, `zone-effect`, `information-action`, or `card-or-object`;
+- `family`: broad mechanism family such as `exchange`, `petition`, `vote`, `contest`, `coordination`, `hidden-role`, `facilitator-action`, `live-administration`, `triggered-ability`, `zone-effect`, `information-action`, or `card-or-object`;
 - `summary`: short designer-facing description;
 - `phases`: phases where this mechanism normally applies;
 - `inputs`: free structured input declaration;
@@ -257,7 +257,7 @@ Supported effects:
 - `revealContactHint`: stores a contact hint status;
 - `runTimedIncome`: runs a table-level income step from a source resource into a target resource, optionally drawing components by turn parity and role.
 
-`runTimedIncome` is meant for repeated administrative phases such as Long Live the King Audience or economic-simulation ticks. It supports:
+`runTimedIncome` is meant for repeated administrative phases such as Long Live the King Audience or economic-simulation ticks. In live games, it should be treated as the recording/application step after the table scene has happened, not as a replacement for the scene. It supports:
 
 - `resource`: participant resource to credit;
 - `amountResource`: participant resource used as the credit amount;
@@ -270,7 +270,7 @@ Supported effects:
 
 When a module declares a session role with `canInjectGameElements: true`, `runTimedIncome` requires an active assignment for one of those roles.
 
-If an action is bound to a workflow mechanism such as `petition`, `vote`, or `contest`, unsupported immediate effects can open a `pendingResolution` instead of being discarded. The resolution keeps the action, participant, payload, mechanic id, mechanic family, and module-declared resolution/visibility policy for later rule handling.
+If an action is bound to a workflow mechanism such as `petition`, `vote`, `contest`, or `live-administration`, unsupported immediate effects can open a `pendingResolution` instead of being discarded. The resolution keeps the action, participant, payload, mechanic id, mechanic family, and module-declared resolution/visibility policy for later rule handling.
 
 When the facilitator resolves a pending resolution, the server records the selected outcome and creates a `resolution` channel message. Participant-bound resolutions notify only the concerned participant; table-level resolutions notify all participants.
 

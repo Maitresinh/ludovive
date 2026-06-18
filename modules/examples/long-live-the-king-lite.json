@@ -160,7 +160,7 @@
       "id": "audience-income",
       "name": "Audience du roi",
       "family": "timed-income",
-      "summary": "Au debut du tour, le Roi paie les revenus, distribue les cartes Intrigue, revele la sante a partir du tour 2, et permet a chaque joueur de connaitre sa Faveur.",
+      "summary": "L'audience se tient en direct; le Roi ou le chambellan enregistre ensuite les revenus, cartes Intrigue, informations de sante et demandes de Faveur.",
       "phases": ["audience"],
       "inputs": [
         { "id": "turn", "type": "session-state", "state": "currentTurn" },
@@ -168,6 +168,8 @@
       ],
       "resolution": {
         "type": "facilitatorDistribution",
+        "mode": "liveThenRecord",
+        "recordedBy": "king-or-chamberlain",
         "incomeResource": "gold",
         "intrigueCardsOddTurns": 1,
         "intrigueCardsEvenTurns": 2,

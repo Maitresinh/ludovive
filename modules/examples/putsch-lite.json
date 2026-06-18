@@ -200,6 +200,32 @@
         { "id": "open-counter", "name": "Contre public", "commitments": "defender-visible" },
         { "id": "multi-party-coup", "name": "Coup multi-factions", "leaderCount": "2+" }
       ]
+    },
+    {
+      "id": "minister-council-record",
+      "name": "Conseil des ministres",
+      "family": "live-administration",
+      "summary": "Le conseil se tient en direct; l'autorite saisit ensuite les presents, fonds detournes, decisions et ajustements de ressources.",
+      "phases": ["first-council"],
+      "inputs": [
+        { "id": "attendeeIds", "type": "participant-list" },
+        { "id": "embezzlement", "type": "resource-bundle", "allowed": ["money"] },
+        { "id": "decisions", "type": "text" }
+      ],
+      "resolution": {
+        "type": "liveThenRecord",
+        "recordedBy": "facilitator-capitalist",
+        "canAdjustResources": ["money"],
+        "canSetSessionState": ["firstCouncilDue"],
+        "defaultEffects": [
+          { "type": "setSessionState", "state": "firstCouncilDue", "value": false }
+        ]
+      },
+      "visibility": { "dashboard": "full", "participants": "public-summary" },
+      "variants": [
+        { "id": "post-coup", "name": "Conseil apres coup d'Etat", "trigger": "firstCouncilDue" },
+        { "id": "regular-hourly", "name": "Conseil regulier", "trigger": "regularCouncilEverySeconds" }
+      ]
     }
   ],
   "actions": [
@@ -232,6 +258,16 @@
       "actor": "facilitator-capitalist",
       "target": "self",
       "effect": { "type": "adjustResource", "resource": "money", "delta": 5000 },
+      "fallback": "facilitator-confirmation"
+    },
+    {
+      "id": "record-minister-council",
+      "name": "Enregistrer le conseil",
+      "phase": "first-council",
+      "actor": "facilitator-capitalist",
+      "target": "game",
+      "effect": { "type": "recordLiveResults" },
+      "mechanicId": "minister-council-record",
       "fallback": "facilitator-confirmation"
     }
   ],

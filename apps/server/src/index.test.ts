@@ -301,7 +301,7 @@ test("loads module mechanics and links actions to them", async () => {
   const wolfpackSummary = modules.find((module: JsonObject) => module.id === "wolfpack-lite");
   const kingSummary = modules.find((module: JsonObject) => module.id === "long-live-the-king-lite");
 
-  assert.equal(putschSummary.mechanics, 2);
+  assert.equal(putschSummary.mechanics, 3);
   assert.equal(putschSummary.sessionRoles, 2);
   assert.equal(wolfpackSummary.mechanics, 3);
   assert.equal(kingSummary.components, 6);
@@ -319,6 +319,8 @@ test("loads module mechanics and links actions to them", async () => {
   assert.equal(putsch.roles.find((role: JsonObject) => role.id === "facilitator-capitalist").startingResources.copperShares, 50);
   assert.equal(putsch.sessionRoles.find((role: JsonObject) => role.id === "host").canInjectGameElements, false);
   assert.equal(putsch.sessionRoles.find((role: JsonObject) => role.id === "game-authority").defaultRoleId, "facilitator-capitalist");
+  assert.equal(putsch.mechanics.find((mechanic: JsonObject) => mechanic.id === "minister-council-record").family, "live-administration");
+  assert.equal(putsch.actions.find((action: JsonObject) => action.id === "record-minister-council").mechanicId, "minister-council-record");
   const wolfpack = await injectJson("GET", "/modules/wolfpack-lite");
   assert.equal(wolfpack.sessionRoles.find((role: JsonObject) => role.id === "host").defaultRoleId, "captain");
   assert.equal(wolfpack.sessionRoles.find((role: JsonObject) => role.id === "host").canInjectGameElements, false);
@@ -328,6 +330,7 @@ test("loads module mechanics and links actions to them", async () => {
   assert.equal(king.roles.find((role: JsonObject) => role.id === "king").name, "Roi");
   assert.equal(king.sessionRoles.find((role: JsonObject) => role.id === "game-authority").defaultRoleId, "king");
   assert.equal(king.mechanics.find((mechanic: JsonObject) => mechanic.id === "audience-income").family, "timed-income");
+  assert.equal(king.mechanics.find((mechanic: JsonObject) => mechanic.id === "audience-income").resolution.mode, "liveThenRecord");
   assert.equal(king.actions.find((action: JsonObject) => action.id === "hold-audience").mechanicId, "audience-income");
   assert.equal(putsch.actions.find((action: JsonObject) => action.id === "embezzle-council-funds").phase, "first-council");
   assert.equal(putsch.actions.find((action: JsonObject) => action.id === "embezzle-council-funds").effect.delta, 5000);
@@ -1065,6 +1068,35 @@ test("opens pending contest resolutions from module mechanics", async () => {
   assert.equal(body.dashboard.pendingResolutions[0].recommendedOutcomes[0].effects[1].type, "scaleSessionCounter");
   assert.equal(body.dashboard.pendingResolutions[0].recommendedOutcomes[0].effects[1].state, "copperPrice");
   assert.equal(body.dashboard.pendingResolutions[0].recommendedOutcomes[0].effects[1].factor, 0.5);
+});
+
+test("opens pending live administration records for Putsch council results", async () => {
+  const session = await createSession("putsch-lite");
+  const code = session.code;
+  const director = await createParticipant(code, "Paquito", "facilitator-capitalist");
+  const minister = await createParticipant(code, "General", "general");
+  await advancePhase(code);
+  await advancePhase(code);
+  await advancePhase(code);
+  await advancePhase(code);
+
+  const council = await injectJson("POST", `/sessions/${code}/events`, {
+    type: "action.requested",
+    actionId: "record-minister-council",
+    participantId: director.participant.id,
+    payload: {
+      attendeeIds: [director.participant.id, minister.participant.id],
+      embezzlement: { money: 5000 },
+      decisions: "Le conseil valide un detournement et ajourne le prochain tour."
+    }
+  });
+
+  assert.equal(council.accepted, true);
+  assert.equal(council.actionResult.effect.type, "pendingResolution");
+  assert.equal(council.actionResult.effect.mechanicId, "minister-council-record");
+  assert.equal(council.actionResult.effect.mechanicFamily, "live-administration");
+  assert.equal(council.dashboard.pendingResolutions[0].payload.decisions, "Le conseil valide un detournement et ajourne le prochain tour.");
+  assert.deepEqual(council.dashboard.pendingResolutions[0].payload.embezzlement, { money: 5000 });
 });
 
 test("lets the facilitator resolve a pending resolution", async () => {

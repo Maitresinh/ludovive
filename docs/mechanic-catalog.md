@@ -19,6 +19,7 @@ This catalog extracts reusable mechanisms from the current Thaumacord examples a
 | `vote` | How is collective preference captured and weighted? | Council votes, democratic emergency votes, day lynch votes | Ballots, weights, quorum/majority, visibility |
 | `hidden-role` | What does each participant know, and when can it change? | Mafia/Werewolf, Blood on the Clocktower, role cards | Secret assignment, private info, death/status, moderator prompts |
 | `facilitator-action` | What can the authority receive, alter, reveal, validate, or override? | King, moderator, Storyteller, GM dashboard | Inbox, approvals, corrections, private/public sends |
+| `live-administration` | Which live table result must be recorded after the scene? | Long Live the King audience, Putsch minister council | Structured result entry, audit trail, authority validation, optional resource/state effects |
 | `triggered-ability` | When does a passive or once-per-turn ability fire? | Status cards, immunities, counters, doctor/protection | Trigger registry, usage limits, target restrictions |
 | `timed-income` | What refreshes at a phase or timer boundary? | Putsch income, Long Live the King audience allowance | Scheduled grants, caps, phase hooks |
 | `economic-simulation` | How do supply, demand, prices, liquidity, shocks, and queues evolve? | Sheep market, monetary creation, bank run, inflation/deflation simulations | Aggregates, agents, orders, price rules, liquidity pools, confidence shocks |
@@ -50,7 +51,7 @@ Actions bind to mechanisms with `mechanicId`. The action remains the player-faci
 1. `exchange`: direct transfer is implemented; add pending/accepted/cancelled exchanges next.
 2. `petition` plus `vote`: opening pending petition resolutions is implemented; add vote collection and authority decision next.
 3. `contest`: opening pending contest resolutions is implemented; add sealed commitments and opposed checks next.
-4. `facilitator-action`: dashboard receives, approves, rejects, edits, reveals, and sends.
+4. `live-administration` and `facilitator-action`: live scenes are recorded, then dashboards approve, reject, edit, reveal, and send.
 5. `triggered-ability`: counters, immunities, once-per-turn abilities.
 6. `hidden-role` and `information-action`: Mafia/Werewolf/Blood-on-the-Clocktower-like support.
 7. `economic-simulation`: sheep market, money creation, bank run, liquidity, confidence, supply/demand shocks.
@@ -58,7 +59,7 @@ Actions bind to mechanisms with `mechanicId`. The action remains the player-faci
 
 ## Current Runner Behavior
 
-When an action has a `mechanicId` and its effect is not one of the immediate built-in effects, the server can open a `pendingResolution` for workflow families such as `petition`, `vote`, and `contest`.
+When an action has a `mechanicId` and its effect is not one of the immediate built-in effects, the server can open a `pendingResolution` for workflow families such as `petition`, `vote`, `contest`, and `live-administration`.
 
 The pending resolution stores:
 
@@ -68,7 +69,7 @@ The pending resolution stores:
 - the original event payload;
 - the module-declared `resolution` and `visibility` policy.
 
-This deliberately does not decide the outcome yet. Follow-up runners will collect votes, sealed commitments, facilitator decisions, or other inputs before closing the resolution.
+This deliberately does not decide the outcome yet. Follow-up runners will collect votes, sealed commitments, live-scene records, facilitator decisions, or other inputs before closing the resolution.
 
 ## Design Notes
 

@@ -1148,7 +1148,16 @@ function effectType(effect: unknown, fallback: string): string {
 }
 
 function opensPendingResolution(mechanic: GameModule["mechanics"][number]): boolean {
-  return ["petition", "vote", "contest", "facilitator-action", "triggered-ability", "information-action", "card-or-object"].includes(mechanic.family);
+  return [
+    "petition",
+    "vote",
+    "contest",
+    "facilitator-action",
+    "live-administration",
+    "triggered-ability",
+    "information-action",
+    "card-or-object"
+  ].includes(mechanic.family);
 }
 
 function createPendingActionResolution(
