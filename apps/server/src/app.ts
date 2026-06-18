@@ -1431,12 +1431,9 @@ function minimalReadModel(session: Session): Record<string, unknown> {
       roles: module.roles.map((role) => ({
         id: role.id,
         name: role.name,
-        officialRole: role.officialRole,
-        secretRole: role.secretRole
-      })),
-      sessionRoles: module.sessionRoles
+        officialRole: role.officialRole
+      }))
     },
-    sessionRoleAssignments: session.sessionRoleAssignments,
     phase: currentPhase(session),
     phaseClock: session.phaseClock,
     devices: session.devices.map((device) => ({
@@ -1729,6 +1726,7 @@ function participantReadModel(session: Session, participantId: string): Record<s
   }
 
   const module = getModuleOrThrow(session.moduleId);
+  const ownRole = participant.roleId ? module.roles.find((role) => role.id === participant.roleId) : undefined;
   return {
     code: session.code,
     module: {
@@ -1742,16 +1740,14 @@ function participantReadModel(session: Session, participantId: string): Record<s
       roles: module.roles.map((role) => ({
         id: role.id,
         name: role.name,
-        officialRole: role.officialRole,
-        secretRole: role.secretRole
-      })),
-      sessionRoles: module.sessionRoles
+        officialRole: role.officialRole
+      }))
     },
-    sessionRoleAssignments: session.sessionRoleAssignments,
     phase: currentPhase(session),
     phaseClock: session.phaseClock,
     tableStatuses: session.statuses,
     participant,
+    ownRole,
     availableActions: actionAvailability(session, participant),
     pendingResolutions: session.pendingResolutions.filter((resolution) => resolution.participantId === participant.id),
     exchanges: session.exchanges.filter((exchange) => exchange.fromParticipantId === participant.id || exchange.toParticipantId === participant.id),
@@ -1761,8 +1757,7 @@ function participantReadModel(session: Session, participantId: string): Record<s
       kind: candidate.kind,
       name: candidate.name,
       roleId: candidate.roleId
-    })),
-    recentAudit: session.audit.slice(-20)
+    }))
   };
 }
 
@@ -2538,6 +2533,8 @@ function renderParticipantApp(): string {
       <h2 id="participantTitle">Participant</h2>
       <div id="summary"></div>
       <div id="phaseClock" class="muted"></div>
+      <h3>Role</h3>
+      <div id="roleDetails" class="stack"></div>
       <h3>Ressources</h3>
       <div id="resources" class="stack"></div>
       <h3>Statuts</h3>
@@ -2632,6 +2629,15 @@ function renderParticipantApp(): string {
     function roleLabel(model, roleId) {
       return model.module.roles.find((role) => role.id === roleId)?.name || roleId || "role a attribuer";
     }
+    function renderRoleDetails(model) {
+      const role = model.ownRole;
+      if (!role) return '<div class="muted">Role a attribuer par le meneur</div>';
+      return '<div class="item"><strong>' + role.name + '</strong>'
+        + (role.officialRole ? '<div>' + role.officialRole + '</div>' : '')
+        + (role.secretRole ? '<div class="muted">Secret: ' + role.secretRole + '</div>' : '')
+        + (role.victoryCondition?.text ? '<div class="muted">' + role.victoryCondition.text + '</div>' : '')
+        + '</div>';
+    }
     function formatClock(clock) {
       if (!clock) return "sans minuteur";
       const end = clock.phaseEndsAt ? new Date(clock.phaseEndsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "fin libre";
@@ -2714,6 +2720,7 @@ function renderParticipantApp(): string {
         renderStatusPills(model.tableStatuses)
       ].join(" ");
       byId("phaseClock").textContent = formatClock(model.phaseClock);
+      byId("roleDetails").innerHTML = renderRoleDetails(model);
       byId("resources").innerHTML = Object.entries(model.participant.resources || {}).map(([key, value]) => '<div class="item"><strong>' + resourceLabel(model, key) + '</strong><div>' + value + '</div></div>').join("") || '<div class="muted">Aucune ressource</div>';
       byId("statuses").innerHTML = renderStatuses(model.participant.statuses);
       const otherParticipants = (model.visibleParticipants || []).filter((participant) => participant.id !== model.participant.id);

@@ -194,6 +194,8 @@ test("serves a mobile participant app for session join", async () => {
   assert.match(response.body, /Entrer dans la partie/);
   assert.match(response.body, /Transferer/);
   assert.match(response.body, /Declencher/);
+  assert.match(response.body, /id="roleDetails"/);
+  assert.match(response.body, /renderRoleDetails/);
   assert.match(response.body, /id="statuses"/);
   assert.match(response.body, /renderStatuses/);
   assert.match(response.body, /actionInputControl/);
@@ -221,7 +223,11 @@ test("lets a participant join with a chosen role and receive a filtered read mod
   assert.equal(joined.readModel.visibleParticipants.length, 1);
   assert.equal(joined.readModel.module.resources.find((resource: JsonObject) => resource.id === "money").name, "Escudos");
   assert.equal(joined.readModel.module.roles.find((role: JsonObject) => role.id === "general").name, "General");
-  assert.equal(joined.readModel.module.sessionRoles.find((role: JsonObject) => role.id === "game-authority").canInjectGameElements, true);
+  assert.equal(joined.readModel.module.roles.find((role: JsonObject) => role.id === "facilitator-capitalist").secretRole, undefined);
+  assert.equal(joined.readModel.module.sessionRoles, undefined);
+  assert.equal(joined.readModel.sessionRoleAssignments, undefined);
+  assert.equal(joined.readModel.aggregates, undefined);
+  assert.equal(joined.readModel.ownRole.name, "General");
   assert.equal(joined.readModel.tableStatuses.copperPrice, 1000);
 });
 
@@ -531,7 +537,9 @@ test("filters device read models for unbound and bound devices", async () => {
   assert.equal(boundModel.readModel, "device.participant");
   assert.equal(boundModel.participant.name, "Station sonar");
   assert.equal(Array.isArray(boundModel.availableActions), true);
-  assert.equal(Array.isArray(boundModel.recentAudit), true);
+  assert.equal(boundModel.recentAudit, undefined);
+  assert.equal(boundModel.aggregates, undefined);
+  assert.equal(boundModel.sessionRoleAssignments, undefined);
 });
 
 test("broadcasts device heartbeat updates to live audiences", async () => {
