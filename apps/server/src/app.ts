@@ -1767,6 +1767,7 @@ function renderIndex(): string {
     .pill { display: inline-block; padding: 4px 8px; border: 1px solid #59616b; border-radius: 999px; margin: 2px; font-size: 12px; color: #dce1e6; }
     .muted { color: var(--muted); }
     .list { display: grid; gap: 8px; }
+    .list label input[type="checkbox"] { width: auto; margin-right: 6px; }
     .item { border: 1px solid #2f353c; border-radius: 8px; padding: 10px; background: #111417; }
     .item strong { display: block; margin-bottom: 4px; }
     pre { white-space: pre-wrap; background: #0d0f11; padding: 12px; border-radius: 6px; overflow: auto; max-height: 420px; }
@@ -1865,6 +1866,9 @@ function renderIndex(): string {
           <button id="assignSessionRole" class="secondary">Attribuer casquette</button>
           <div id="sessionRoles" class="list"></div>
           <div id="injectionAuthorityNotice" class="muted"></div>
+
+          <h3>Scenes live</h3>
+          <div id="liveScenes" class="list"></div>
 
           <h3>Correction</h3>
           <label for="resourceParticipant">Participant</label>
@@ -1995,6 +1999,10 @@ function renderIndex(): string {
         button.disabled = !hasAuthority;
         button.title = hasAuthority ? "" : "Casquette d'injection requise";
       });
+      document.querySelectorAll(".recordLiveScene").forEach((button) => {
+        button.disabled = !hasAuthority;
+        button.title = hasAuthority ? "" : "Casquette d'injection requise";
+      });
     }
     function renderSessionRoles(session) {
       const assignments = session.sessionRoleAssignments || {};
@@ -2020,6 +2028,55 @@ function renderIndex(): string {
       const effects = (outcome.effects || []).map((effect) => dashboardResolutionEffectLabel(session, effect)).filter(Boolean);
       if (!outcome.description && effects.length === 0) return "";
       return '<div class="muted" data-resolution-outcome-detail="' + outcome.id + '">' + [outcome.description, effects.length ? "Effets: " + effects.join(" / ") : ""].filter(Boolean).join(" - ") + '</div>';
+    }
+    function dashboardActionInputLabel(input) {
+      return input.label || input.name || input.id;
+    }
+    function dashboardActionParticipantOptions(session) {
+      return session.participants
+        .map((participant) => option(participant.id, participant.name + (participant.roleId ? " (" + dashboardRoleLabel(session, participant.roleId) + ")" : "")))
+        .join("");
+    }
+    function dashboardActionInputControl(session, input) {
+      if (!input || !input.id || input.source === "actor-or-bound-device") return "";
+      if (input.type === "session-state") return "";
+      const label = dashboardActionInputLabel(input);
+      if (input.type === "text") {
+        return '<label>' + label + '</label><textarea data-live-input="' + input.id + '" placeholder="' + label + '"></textarea>';
+      }
+      if (input.type === "participant") {
+        return '<label>' + label + '</label><select data-live-input="' + input.id + '">' + dashboardActionParticipantOptions(session) + '</select>';
+      }
+      if (input.type === "participant-list") {
+        if (input.count) {
+          return Array.from({ length: Number(input.count) }, (_, index) => '<label>' + label + ' ' + (index + 1) + '</label><select data-live-input="' + input.id + '" data-list-index="' + index + '">' + dashboardActionParticipantOptions(session) + '</select>').join("");
+        }
+        return '<label>' + label + '</label><div class="list">' + session.participants.map((participant) => '<label><input type="checkbox" data-live-input="' + input.id + '" data-list-multi="true" value="' + participant.id + '" /> ' + participant.name + '</label>').join("") + '</div>';
+      }
+      if (input.type === "resource-bundle") {
+        const resources = input.allowed || session.module.resources.map((resource) => resource.id);
+        return '<div class="stack">' + resources.map((resourceId) => '<label>' + dashboardResourceLabel(session, resourceId) + '</label><input type="number" min="0" value="0" data-live-input="' + input.id + '" data-resource-id="' + resourceId + '" />').join("") + '</div>';
+      }
+      return '<label>' + label + '</label><input data-live-input="' + input.id + '" placeholder="' + label + '" />';
+    }
+    function dashboardActorMatches(action, participant) {
+      return action.actor === "any" || participant.roleId === action.actor;
+    }
+    function renderLiveSceneActions(session) {
+      const actions = (session.module.actions || []).filter((action) => {
+        if (action.phase !== "*" && action.phase !== session.phase.id) return false;
+        const mechanic = (session.module.mechanics || []).find((candidate) => candidate.id === action.mechanicId);
+        return mechanic && (mechanic.family === "live-administration" || mechanic.resolution?.mode === "liveThenRecord");
+      });
+      return actions.map((action) => {
+        const mechanic = (session.module.mechanics || []).find((candidate) => candidate.id === action.mechanicId) || {};
+        const actors = session.participants.filter((participant) => dashboardActorMatches(action, participant));
+        const actorOptions = actors.map((participant) => option(participant.id, participant.name + " (" + dashboardRoleLabel(session, participant.roleId) + ")")).join("");
+        const controls = (mechanic.inputs || []).map((input) => dashboardActionInputControl(session, input)).join("");
+        const disabled = actors.length === 0 ? " disabled" : "";
+        const hint = actors.length === 0 ? '<div class="muted">Aucun acteur autorise dans cette phase.</div>' : "";
+        return '<div class="item liveSceneCard"><strong>' + action.name + '</strong><div class="muted">' + (mechanic.summary || action.fallback || action.id) + '</div>' + hint + '<label>Acteur qui enregistre</label><select data-live-actor>' + actorOptions + '</select>' + controls + '<button class="secondary recordLiveScene" data-action-id="' + action.id + '"' + disabled + '>Enregistrer resultat</button></div>';
+      }).join("") || '<div class="muted">Aucune scene live a enregistrer dans cette phase</div>';
     }
     function formatClock(clock) {
       if (!clock) return "sans minuteur";
@@ -2104,6 +2161,7 @@ function renderIndex(): string {
         return '<div class="item"><strong>' + (from ? from.name : "source inconnue") + ' -> ' + (to ? to.name : "cible inconnue") + '</strong><div>' + resources + '</div><div class="muted">' + exchange.status + '</div></div>';
       }).join("") || '<div class="muted">Aucun echange</div>';
       byId("sessionRoles").innerHTML = renderSessionRoles(session);
+      byId("liveScenes").innerHTML = renderLiveSceneActions(session);
       byId("pendingResolutions").innerHTML = (session.pendingResolutions || []).map((resolution) => {
         const participant = session.participants.find((candidate) => candidate.id === resolution.participantId);
         const payload = resolution.payload ? JSON.stringify(resolution.payload) : "";
@@ -2148,6 +2206,37 @@ function renderIndex(): string {
         effects.push(effect);
       }
       if (effects.length) payload.effects = effects;
+      return payload;
+    }
+    function collectLiveScenePayload(card) {
+      const payload = {};
+      card.querySelectorAll("[data-live-input]").forEach((field) => {
+        const key = field.dataset.liveInput;
+        if (!key) return;
+        if (field.type === "checkbox") {
+          if (!field.checked) return;
+          const list = Array.isArray(payload[key]) ? payload[key] : [];
+          list.push(field.value);
+          payload[key] = list;
+          return;
+        }
+        if (field.dataset.resourceId) {
+          const value = Number(field.value);
+          if (value > 0) {
+            const bundle = payload[key] && typeof payload[key] === "object" && !Array.isArray(payload[key]) ? payload[key] : {};
+            bundle[field.dataset.resourceId] = value;
+            payload[key] = bundle;
+          }
+          return;
+        }
+        if (field.dataset.listIndex !== undefined) {
+          const list = Array.isArray(payload[key]) ? payload[key] : [];
+          if (field.value) list[Number(field.dataset.listIndex)] = field.value;
+          payload[key] = list.filter(Boolean);
+          return;
+        }
+        if (field.value) payload[key] = field.value;
+      });
       return payload;
     }
     byId("module").addEventListener("change", async () => loadModuleDetails(byId("module").value));
@@ -2225,6 +2314,18 @@ function renderIndex(): string {
       const body = { outcome: button.dataset.outcome || "facilitator-resolved", payload: collectResolutionPayload(card) };
       if (note) body.note = note;
       await api("/sessions/" + sessionCode + "/resolutions/" + button.dataset.resolutionId + "/resolve", { method: "POST", body: JSON.stringify(body) });
+      await refresh();
+    }));
+    byId("liveScenes").addEventListener("click", (event) => run(async () => {
+      const button = event.target.closest(".recordLiveScene");
+      if (!button) return;
+      const card = button.closest(".liveSceneCard");
+      await api("/sessions/" + sessionCode + "/events", { method: "POST", body: JSON.stringify({
+        type: "action.recorded",
+        actionId: button.dataset.actionId,
+        participantId: card.querySelector("[data-live-actor]")?.value,
+        payload: collectLiveScenePayload(card)
+      }) });
       await refresh();
     }));
     byId("setResource").addEventListener("click", () => run(async () => {
