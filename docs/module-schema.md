@@ -254,7 +254,21 @@ Supported effects:
 - `adjustResource`: adds `delta` to a participant resource;
 - `setState`: writes a value to participant `statuses`;
 - `message`: stores a simple last message status;
-- `revealContactHint`: stores a contact hint status.
+- `revealContactHint`: stores a contact hint status;
+- `runTimedIncome`: runs a table-level income step from a source resource into a target resource, optionally drawing components by turn parity and role.
+
+`runTimedIncome` is meant for repeated administrative phases such as Long Live the King Audience or economic-simulation ticks. It supports:
+
+- `resource`: participant resource to credit;
+- `amountResource`: participant resource used as the credit amount;
+- `componentId`: optional component pool to draw from;
+- `oddTurnCount` and `evenTurnCount`: default component draw count by turn parity;
+- `fixedDrawByRole`: role-specific draw count that replaces the parity count;
+- `bonusDrawByRole`: role-specific bonus added to the parity count;
+- `lowStatusResource`, `lowStatusThreshold`, and `lowStatusIncomeMultiplier`: optional reduced income rule;
+- `excludeRoles`: roles ignored by the income step.
+
+When a module declares a session role with `canInjectGameElements: true`, `runTimedIncome` requires an active assignment for one of those roles.
 
 If an action is bound to a workflow mechanism such as `petition`, `vote`, or `contest`, unsupported immediate effects can open a `pendingResolution` instead of being discarded. The resolution keeps the action, participant, payload, mechanic id, mechanic family, and module-declared resolution/visibility policy for later rule handling.
 

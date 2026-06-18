@@ -81,14 +81,20 @@ async function assignGameAuthority(code: string): Promise<JsonObject> {
   });
 }
 
-async function assignKingAuthority(code: string): Promise<JsonObject> {
+async function createKingWithAuthority(code: string): Promise<JsonObject> {
   const king = await createParticipant(code, "Le Roi", "king");
-  await injectJson("POST", `/sessions/${code}/session-roles/host`, {
+  const host = await injectJson("POST", `/sessions/${code}/session-roles/host`, {
     participantId: king.participant.id
   });
-  return injectJson("POST", `/sessions/${code}/session-roles/game-authority`, {
+  const authority = await injectJson("POST", `/sessions/${code}/session-roles/game-authority`, {
     participantId: king.participant.id
   });
+  return { king: king.participant, host, authority };
+}
+
+async function assignKingAuthority(code: string): Promise<JsonObject> {
+  const assignment = await createKingWithAuthority(code);
+  return assignment.authority;
 }
 
 function collectLiveMessages(url: string, expectedCount = 2): Promise<{ socket: WebSocket; messages: JsonObject[] }> {
@@ -322,6 +328,7 @@ test("loads module mechanics and links actions to them", async () => {
   assert.equal(king.roles.find((role: JsonObject) => role.id === "king").name, "Roi");
   assert.equal(king.sessionRoles.find((role: JsonObject) => role.id === "game-authority").defaultRoleId, "king");
   assert.equal(king.mechanics.find((mechanic: JsonObject) => mechanic.id === "audience-income").family, "timed-income");
+  assert.equal(king.actions.find((action: JsonObject) => action.id === "hold-audience").mechanicId, "audience-income");
   assert.equal(putsch.actions.find((action: JsonObject) => action.id === "embezzle-council-funds").phase, "first-council");
   assert.equal(putsch.actions.find((action: JsonObject) => action.id === "embezzle-council-funds").effect.delta, 5000);
 });
@@ -721,6 +728,62 @@ test("runs module setup distributions into participant inventories", async () =>
   assert.equal(queenModel.aggregates, undefined);
   assert.equal(baronModel.participant.inventory["intrigue-card"], 2);
   assert.equal(baronModel.participant.inventory["status-card"], 3);
+});
+
+test("runs Long Live audience income and intrigue draws through a module action", async () => {
+  const session = await createSession("long-live-the-king-lite");
+  const code = session.code;
+  const authority = await createKingWithAuthority(code);
+  const queen = await createParticipant(code, "Reine", "queen");
+  const baron = await createParticipant(code, "Baron", "baron");
+  const treasurer = await createParticipant(code, "Tresorier", "treasurer");
+  await setResource(code, queen.participant.id, "income", 4);
+  await setResource(code, baron.participant.id, "income", 6);
+  await setResource(code, treasurer.participant.id, "income", 5);
+  await advancePhase(code);
+
+  const audience = await injectJson("POST", `/sessions/${code}/events`, {
+    type: "action.requested",
+    actionId: "hold-audience",
+    participantId: authority.king.id
+  });
+
+  assert.equal(audience.accepted, true);
+  assert.equal(audience.actionResult.effect.type, "runTimedIncome");
+  assert.equal(audience.actionResult.effect.turn, 1);
+  assert.deepEqual(audience.actionResult.effect.participants, [
+    queen.participant.id,
+    baron.participant.id,
+    treasurer.participant.id
+  ]);
+  assert.equal(audience.dashboard.participants.find((candidate: JsonObject) => candidate.id === queen.participant.id).resources.gold, 9);
+  assert.equal(audience.dashboard.participants.find((candidate: JsonObject) => candidate.id === baron.participant.id).resources.gold, 9);
+  assert.equal(audience.dashboard.participants.find((candidate: JsonObject) => candidate.id === treasurer.participant.id).resources.gold, 9);
+  assert.equal(audience.dashboard.participants.find((candidate: JsonObject) => candidate.id === authority.king.id).inventory["intrigue-card"], undefined);
+  assert.equal(audience.dashboard.participants.find((candidate: JsonObject) => candidate.id === queen.participant.id).inventory["intrigue-card"], 2);
+  assert.equal(audience.dashboard.participants.find((candidate: JsonObject) => candidate.id === baron.participant.id).inventory["intrigue-card"], 1);
+  assert.equal(audience.dashboard.participants.find((candidate: JsonObject) => candidate.id === treasurer.participant.id).inventory["intrigue-card"], 1);
+  assert.equal(audience.dashboard.componentPools["intrigue-card"].remaining, 76);
+});
+
+test("rejects Long Live audience income without game authority", async () => {
+  const session = await createSession("long-live-the-king-lite");
+  const code = session.code;
+  const king = await createParticipant(code, "Le Roi", "king");
+  await advancePhase(code);
+
+  const audience = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/events`,
+    payload: {
+      type: "action.requested",
+      actionId: "hold-audience",
+      participantId: king.participant.id
+    }
+  });
+
+  assert.equal(audience.statusCode, 400);
+  assert.equal(audience.json<JsonObject>().error, "Injection authority is required for timed income");
 });
 
 test("draws components from pools into participant inventories", async () => {

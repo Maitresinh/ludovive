@@ -447,6 +447,22 @@ const revealContactHintEffectSchema = z.object({
   precision: z.string().min(1)
 });
 
+const runTimedIncomeEffectSchema = z.object({
+  type: z.literal("runTimedIncome"),
+  resource: z.string().min(1),
+  amountResource: z.string().min(1),
+  componentId: z.string().min(1).optional(),
+  oddTurnCount: z.number().int().nonnegative().default(0),
+  evenTurnCount: z.number().int().nonnegative().default(0),
+  turnState: z.string().min(1).default("currentTurn"),
+  fixedDrawByRole: z.record(z.number().int().nonnegative()).default({}),
+  bonusDrawByRole: z.record(z.number().int().nonnegative()).default({}),
+  lowStatusResource: z.string().min(1).optional(),
+  lowStatusThreshold: z.number().int().optional(),
+  lowStatusIncomeMultiplier: z.number().nonnegative().default(1),
+  excludeRoles: z.array(z.string()).default([])
+});
+
 const unlockPhaseZoneEffectSchema = z.object({
   type: z.literal("unlockPhase"),
   phase: z.string().min(1)
@@ -467,7 +483,8 @@ const knownEffectSchema = z.discriminatedUnion("type", [
   resourceDeltaEffectSchema,
   setStateEffectSchema,
   messageEffectSchema,
-  revealContactHintEffectSchema
+  revealContactHintEffectSchema,
+  runTimedIncomeEffectSchema
 ]);
 
 const knownZoneEffectSchema = z.discriminatedUnion("type", [
@@ -969,7 +986,46 @@ function drawComponentsToParticipant(session: Session, participantId: string, co
   };
 }
 
-function applyEffect(module: GameModule, participant: Participant, effect: KnownEffect, event: EventInput): Record<string, unknown> {
+function runTimedIncome(session: Session, effect: z.infer<typeof runTimedIncomeEffectSchema>): Record<string, unknown> {
+  const module = getModuleOrThrow(session.moduleId);
+  const turn = Number(session.statuses[effect.turnState] ?? session.phaseClock.turn);
+  const baseDraw = turn % 2 === 0 ? effect.evenTurnCount : effect.oddTurnCount;
+  const targets = session.participants.filter((participant) => !effect.excludeRoles.includes(participant.roleId ?? ""));
+  const incomeResults = targets.map((participant) => {
+    const rawAmount = Math.max(0, Math.floor(participant.resources[effect.amountResource] ?? 0));
+    const lowStatus = effect.lowStatusResource && effect.lowStatusThreshold !== undefined
+      ? (participant.resources[effect.lowStatusResource] ?? 0) <= effect.lowStatusThreshold
+      : false;
+    const amount = lowStatus ? Math.floor(rawAmount * effect.lowStatusIncomeMultiplier) : rawAmount;
+    return {
+      participantId: participant.id,
+      roleId: participant.roleId,
+      income: adjustResource(module, participant, effect.resource, amount)
+    };
+  });
+
+  const componentResults = effect.componentId ? targets.map((participant) => {
+    const roleId = participant.roleId ?? "";
+    const count = effect.fixedDrawByRole[roleId] ?? (baseDraw + (effect.bonusDrawByRole[roleId] ?? 0));
+    if (count <= 0) {
+      return { participantId: participant.id, roleId, componentId: effect.componentId, count: 0 };
+    }
+    return drawComponentsToParticipant(session, participant.id, effect.componentId!, count);
+  }) : [];
+
+  return {
+    type: effect.type,
+    turn,
+    resource: effect.resource,
+    amountResource: effect.amountResource,
+    componentId: effect.componentId,
+    participants: targets.map((participant) => participant.id),
+    incomeResults,
+    componentResults
+  };
+}
+
+function applyEffect(session: Session, module: GameModule, participant: Participant, effect: KnownEffect, event: EventInput): Record<string, unknown> {
   if (effect.type === "adjustResource") {
     return {
       type: effect.type,
@@ -990,6 +1046,10 @@ function applyEffect(module: GameModule, participant: Participant, effect: Known
       text: typeof event.payload.text === "string" ? event.payload.text : ""
     };
     return { type: effect.type, visibility: effect.visibility ?? "private" };
+  }
+
+  if (effect.type === "runTimedIncome") {
+    return runTimedIncome(session, effect);
   }
 
   participant.statuses.contactHint = {
@@ -1260,8 +1320,11 @@ function applyActionEvent(session: Session, event: EventInput): Record<string, u
   const appliedCosts = Object.entries(action.cost ?? {}).map(([resourceId, cost]) => adjustResource(module, participant, resourceId, -cost));
   const mechanic = action.mechanicId ? module.mechanics.find((candidate) => candidate.id === action.mechanicId) : undefined;
   const parsedEffect = knownEffectSchema.safeParse(action.effect);
+  if (parsedEffect.success && parsedEffect.data.type === "runTimedIncome" && !hasInjectionAuthority(session)) {
+    throw new Error("Injection authority is required for timed income");
+  }
   const appliedEffect = parsedEffect.success
-    ? applyEffect(module, participant, parsedEffect.data, event)
+    ? applyEffect(session, module, participant, parsedEffect.data, event)
     : applyExchangeAction(session, module, participant, action, mechanic, event) ??
       createPendingActionResolution(session, module, participant, action, event) ??
       { type: "unsupported", effect: action.effect };

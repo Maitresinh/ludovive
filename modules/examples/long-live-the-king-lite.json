@@ -27,6 +27,7 @@
   },
   "resources": [
     { "id": "gold", "name": "Ducats d'or", "visibility": "private", "min": 0 },
+    { "id": "income", "name": "Revenus", "visibility": "private", "min": 0 },
     { "id": "favor", "name": "Faveur", "visibility": "private", "min": 0 },
     { "id": "status", "name": "Statut", "visibility": "public", "min": 0 }
   ],
@@ -232,6 +233,29 @@
       "target": "game",
       "effect": { "type": "openVote", "weightResource": "favor" },
       "mechanicId": "petition-vote"
+    },
+    {
+      "id": "hold-audience",
+      "name": "Tenir l'audience",
+      "phase": "audience",
+      "actor": "king",
+      "target": "game",
+      "effect": {
+        "type": "runTimedIncome",
+        "resource": "gold",
+        "amountResource": "income",
+        "componentId": "intrigue-card",
+        "oddTurnCount": 1,
+        "evenTurnCount": 2,
+        "fixedDrawByRole": { "queen": 2 },
+        "bonusDrawByRole": { "archbishop": 1 },
+        "lowStatusResource": "status",
+        "lowStatusThreshold": 2,
+        "lowStatusIncomeMultiplier": 0.5,
+        "excludeRoles": ["king"]
+      },
+      "mechanicId": "audience-income",
+      "fallback": "facilitator-confirmation"
     },
     {
       "id": "transfer-gold",
