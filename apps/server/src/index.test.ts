@@ -132,6 +132,9 @@ test("serves a one-page Putsch core demo dashboard", async () => {
   assert.match(response.body, /Casquette de session/);
   assert.match(response.body, /assignSessionRole/);
   assert.match(response.body, /renderSessionRoles/);
+  assert.match(response.body, /injectionAuthorityNotice/);
+  assert.match(response.body, /hasDashboardInjectionAuthority/);
+  assert.match(response.body, /Casquette d'injection requise/);
   assert.match(response.body, /Resolutions/);
   assert.match(response.body, /recommendedOutcomes/);
   assert.match(response.body, /data-outcome/);

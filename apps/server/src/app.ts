@@ -1779,6 +1779,7 @@ function renderIndex(): string {
           <select id="sessionRoleParticipant"></select>
           <button id="assignSessionRole" class="secondary">Attribuer casquette</button>
           <div id="sessionRoles" class="list"></div>
+          <div id="injectionAuthorityNotice" class="muted"></div>
 
           <h3>Correction</h3>
           <label for="resourceParticipant">Participant</label>
@@ -1888,6 +1889,27 @@ function renderIndex(): string {
     }
     function dashboardParticipantName(session, participantId) {
       return session.participants.find((participant) => participant.id === participantId)?.name || "non assigne";
+    }
+    function hasDashboardInjectionAuthority(session) {
+      const injectionRoles = (session.module.sessionRoles || []).filter((sessionRole) => sessionRole.canInjectGameElements);
+      if (!injectionRoles.length) return true;
+      const assignments = session.sessionRoleAssignments || {};
+      return injectionRoles.some((sessionRole) => {
+        const assignment = assignments[sessionRole.id];
+        return Boolean(assignment && assignment.enabled && assignment.participantId);
+      });
+    }
+    function updateInjectionControls(session) {
+      const hasAuthority = hasDashboardInjectionAuthority(session);
+      const needsAuthority = (session.module.sessionRoles || []).some((sessionRole) => sessionRole.canInjectGameElements);
+      byId("injectionAuthorityNotice").textContent = needsAuthority && !hasAuthority
+        ? "Assignez une casquette d'injection avant de corriger ou arbitrer."
+        : "";
+      byId("setResource").disabled = !hasAuthority;
+      document.querySelectorAll(".resolveResolution").forEach((button) => {
+        button.disabled = !hasAuthority;
+        button.title = hasAuthority ? "" : "Casquette d'injection requise";
+      });
     }
     function renderSessionRoles(session) {
       const assignments = session.sessionRoleAssignments || {};
@@ -2008,6 +2030,7 @@ function renderIndex(): string {
       byId("audit").textContent = JSON.stringify((session.audit || []).slice(-12), null, 2);
       byId("state").textContent = JSON.stringify(session, null, 2);
       syncSelectors(session);
+      updateInjectionControls(session);
     }
     function syncSelectors(session) {
       const participantOptions = session.participants.map((participant) => option(participant.id, participant.name)).join("");
