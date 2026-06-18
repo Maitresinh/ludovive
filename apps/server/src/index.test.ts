@@ -74,6 +74,13 @@ async function sendMessage(code: string, payload: JsonObject): Promise<JsonObjec
   return injectJson("POST", `/sessions/${code}/messages`, payload);
 }
 
+async function assignGameAuthority(code: string): Promise<JsonObject> {
+  const director = await createParticipant(code, "Paquito", "facilitator-capitalist");
+  return injectJson("POST", `/sessions/${code}/session-roles/game-authority`, {
+    participantId: director.participant.id
+  });
+}
+
 function collectLiveMessages(url: string, expectedCount = 2): Promise<{ socket: WebSocket; messages: JsonObject[] }> {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(url);
@@ -232,6 +239,25 @@ test("assigns session roles separately from in-game roles", async () => {
   });
   assert.equal(assignedHost.sessionRoleAssignments.host.participantId, captain.participant.id);
   assert.equal(assignedHost.sessionRoleAssignments.host.enabled, true);
+});
+
+test("requires injection authority for Putsch resource corrections", async () => {
+  const session = await createSession("putsch-lite");
+  const code = session.code;
+  const player = await createParticipant(code, "James", "kgb-agent");
+
+  const rejected = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/players/${player.participant.id}/resources`,
+    payload: { resourceId: "money", value: 21000 }
+  });
+  assert.equal(rejected.statusCode, 403);
+  assert.match(rejected.json<JsonObject>().error, /Injection authority/);
+
+  await assignGameAuthority(code);
+  const accepted = await setResource(code, player.participant.id, "money", 21000);
+  const updatedPlayer = accepted.participants.find((candidate: JsonObject) => candidate.id === player.participant.id);
+  assert.equal(updatedPlayer.resources.money, 21000);
 });
 
 test("sends facilitator phase timers to participant read models", async () => {
@@ -955,6 +981,7 @@ test("opens pending contest resolutions from module mechanics", async () => {
 test("lets the facilitator resolve a pending resolution", async () => {
   const session = await createSession("putsch-lite");
   const code = session.code;
+  await assignGameAuthority(code);
   const device = await createDevice(code, "Telephone general");
   const otherDevice = await createDevice(code, "Telephone marchand");
   const participant = await createParticipant(code, "General", "general");
@@ -1014,9 +1041,39 @@ test("lets the facilitator resolve a pending resolution", async () => {
   assert.equal(otherModel.messages.some((message: JsonObject) => message.channel === "resolution"), false);
 });
 
+test("requires injection authority before resolving Putsch table state", async () => {
+  const session = await createSession("putsch-lite");
+  const code = session.code;
+  const device = await createDevice(code, "Telephone general");
+  const participant = await createParticipant(code, "General", "general");
+  await bindDevice(code, device.device.id, participant.participant.id);
+  await advancePhase(code);
+  await advancePhase(code);
+
+  const coup = await injectJson("POST", `/sessions/${code}/events`, {
+    type: "action.requested",
+    actionId: "attempt-coup",
+    sourceDeviceId: device.device.id,
+    payload: { defenderId: "pending-defender", leaderIds: ["leader-a", "leader-b"] }
+  });
+  const resolutionId = coup.dashboard.pendingResolutions[0].id;
+
+  const rejected = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/resolutions/${resolutionId}/resolve`,
+    payload: { outcome: "attacker-wins" }
+  });
+
+  assert.equal(rejected.statusCode, 403);
+  assert.match(rejected.json<JsonObject>().error, /Injection authority/);
+  const dashboard = await injectJson("GET", `/sessions/${code}/read-models/dashboard`);
+  assert.equal(dashboard.pendingResolutions.length, 1);
+});
+
 test("rejects invalid resolution effects without closing the resolution", async () => {
   const session = await createSession("putsch-lite");
   const code = session.code;
+  await assignGameAuthority(code);
   const device = await createDevice(code, "Telephone general");
   const participant = await createParticipant(code, "General", "general");
   await bindDevice(code, device.device.id, participant.participant.id);

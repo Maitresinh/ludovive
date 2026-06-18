@@ -172,6 +172,8 @@ POST /sessions/:code/session-roles/:sessionRoleId
 
 The server validates that the session role exists, that the participant exists when supplied, and that `assignableToRoles` allows the participant's current in-game role.
 
+When a module declares at least one session role with `canInjectGameElements: true`, sensitive table mutations require one of those roles to be enabled and assigned to a participant. The current prototype enforces this for resolution arbitration, direct resource correction, and component draws. Modules without an injection-authority role keep the previous open dashboard behavior.
+
 The server keeps an active `phaseClock` on each session:
 
 - `turn`;

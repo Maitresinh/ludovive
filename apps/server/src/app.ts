@@ -1448,6 +1448,18 @@ function assertSessionRoleAssignment(module: GameModule, session: Session, sessi
   return sessionRole;
 }
 
+function hasInjectionAuthority(session: Session): boolean {
+  const module = getModuleOrThrow(session.moduleId);
+  const injectionRoles = module.sessionRoles.filter((sessionRole) => sessionRole.canInjectGameElements);
+  if (injectionRoles.length === 0) {
+    return true;
+  }
+  return injectionRoles.some((sessionRole) => {
+    const assignment = session.sessionRoleAssignments[sessionRole.id];
+    return Boolean(assignment?.enabled && assignment.participantId);
+  });
+}
+
 function incrementCount(target: Record<string, number>, key: string | undefined): void {
   if (!key) {
     return;
@@ -2779,6 +2791,9 @@ app.post("/sessions/:code/resolutions/:resolutionId/resolve", async (request, re
   if (!session) {
     return reply.code(404).send({ error: "Session not found" });
   }
+  if (!hasInjectionAuthority(session)) {
+    return reply.code(403).send({ error: "Injection authority is required for resolving this session" });
+  }
 
   const input = resolveResolutionSchema.parse(request.body ?? {});
   let resolveResult: Record<string, unknown>;
@@ -2825,6 +2840,9 @@ app.post("/sessions/:code/components/draw", async (request, reply) => {
   const session = getSession(code);
   if (!session) {
     return reply.code(404).send({ error: "Session not found" });
+  }
+  if (!hasInjectionAuthority(session)) {
+    return reply.code(403).send({ error: "Injection authority is required for drawing components" });
   }
 
   const input = drawComponentSchema.parse(request.body);
@@ -3062,6 +3080,9 @@ app.post("/sessions/:code/players/:playerId/resources", async (request, reply) =
   }
 
   const module = getModuleOrThrow(session.moduleId);
+  if (!hasInjectionAuthority(session)) {
+    return reply.code(403).send({ error: "Injection authority is required for changing resources" });
+  }
   const participant = session.participants.find((candidate) => candidate.id === playerId);
   if (!participant) {
     return reply.code(404).send({ error: "Participant not found" });
