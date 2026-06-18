@@ -165,6 +165,9 @@ test("serves a one-page Putsch core demo dashboard", async () => {
   assert.match(response.body, /coupResolution/);
   assert.match(response.body, /data-outcome/);
   assert.match(response.body, /renderStatusList/);
+  assert.match(response.body, /renderDashboardAggregates/);
+  assert.match(response.body, /Debug JSON/);
+  assert.doesNotMatch(response.body, /<h2>Etat brut<\/h2>/);
   assert.match(response.body, /collectResolutionPayload/);
   assert.match(response.body, /dashboardOutcomeDetails/);
   assert.match(response.body, /data-resolution-outcome-detail/);

@@ -1816,6 +1816,8 @@ function renderIndex(): string {
     .item { border: 1px solid #2f353c; border-radius: 8px; padding: 10px; background: #111417; }
     .item strong { display: block; margin-bottom: 4px; }
     pre { white-space: pre-wrap; background: #0d0f11; padding: 12px; border-radius: 6px; overflow: auto; max-height: 420px; }
+    details.debug { border: 1px solid var(--line); border-radius: 8px; background: #111417; padding: 10px; }
+    details.debug summary { cursor: pointer; color: var(--muted); }
     .error { color: #ffb1a8; min-height: 20px; }
     @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .topbar { align-items: flex-start; flex-direction: column; } }
   </style>
@@ -1958,7 +1960,7 @@ function renderIndex(): string {
           <div class="grid">
             <div>
               <h3>Agregats</h3>
-              <pre id="aggregates">{}</pre>
+              <div id="aggregates" class="list"></div>
             </div>
             <div>
               <h3>Messages</h3>
@@ -1980,10 +1982,10 @@ function renderIndex(): string {
           <pre id="audit">[]</pre>
         </section>
 
-        <section>
-          <h2>Etat brut</h2>
+        <details class="debug">
+          <summary>Debug JSON</summary>
           <pre id="state">Aucune session chargee.</pre>
-        </section>
+        </details>
       </div>
     </div>
   </main>
@@ -2102,6 +2104,18 @@ function renderIndex(): string {
     function dashboardAutomaticEffectDetails(session, resolution) {
       const effects = (resolution.automaticEffects || []).map((effect) => dashboardResolutionEffectLabel(session, effect)).filter(Boolean);
       return effects.length ? '<div class="muted">Effets auto: ' + effects.join(" / ") + '</div>' : "";
+    }
+    function renderDashboardAggregates(session) {
+      const aggregates = session.aggregates || {};
+      const resourceRows = Object.entries(aggregates.resources || {}).map(([resourceId, stats]) => {
+        const average = Number(stats.average || 0).toFixed(1);
+        return '<div class="item"><strong>' + dashboardResourceLabel(session, resourceId) + '</strong><div>Total: ' + stats.total + '</div><div class="muted">min ' + stats.min + ' / max ' + stats.max + ' / moy. ' + average + '</div></div>';
+      }).join("");
+      const participants = aggregates.participants || {};
+      const participantRow = '<div class="item"><strong>Participants</strong><div>Total: ' + (participants.total || 0) + '</div><div class="muted">Roles: ' + Object.entries(participants.byRole || {}).map(([roleId, count]) => dashboardRoleLabel(session, roleId) + " " + count).join(" / ") + '</div></div>';
+      const inventoryRows = Object.entries(aggregates.inventory || {}).map(([componentId, count]) => '<div class="item"><strong>' + componentId + '</strong><div>En main: ' + count + '</div></div>').join("");
+      const poolRows = Object.entries(aggregates.componentPools || {}).map(([componentId, pool]) => '<div class="item"><strong>' + componentId + '</strong><div>Restant: ' + pool.remaining + '</div><div class="muted">' + (pool.exhausted ? "epuise" : "disponible") + '</div></div>').join("");
+      return [participantRow, resourceRows, inventoryRows, poolRows].filter(Boolean).join("") || '<div class="muted">Aucun agregat</div>';
     }
     function dashboardResolutionClass(resolution) {
       if (resolution.mechanicId === "contested-coup") return " coupResolution";
@@ -2232,7 +2246,7 @@ function renderIndex(): string {
         const participant = session.participants.find((candidate) => candidate.id === device.participantId);
         return '<div class="item"><strong>' + device.name + '</strong><div>' + (participant ? participant.name : "non lie") + '</div><div class="muted">' + (device.connected ? "connecte" : "deconnecte") + '</div></div>';
       }).join("") || '<div class="muted">Aucun appareil</div>';
-      byId("aggregates").textContent = JSON.stringify(session.aggregates || {}, null, 2);
+      byId("aggregates").innerHTML = renderDashboardAggregates(session);
       byId("messages").innerHTML = (session.messages || []).slice(-6).map((message) => '<div class="item"><strong>' + message.channel + '</strong><div>' + message.text + '</div><div class="muted">' + message.target + '</div></div>').join("") || '<div class="muted">Aucun message</div>';
       byId("exchangeLog").innerHTML = (session.exchanges || []).slice(-8).map((exchange) => {
         const from = session.participants.find((participant) => participant.id === exchange.fromParticipantId);
