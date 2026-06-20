@@ -118,15 +118,49 @@ async function ensureEpic(projectId, subject) {
   });
 }
 
+function epicMoveTag(epicSubject) {
+  return `A_deplacer_${String(epicSubject)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")}`;
+}
+
+function tagName(tag) {
+  return Array.isArray(tag) ? tag[0] : tag;
+}
+
+async function ensureStoryTag(story, tag) {
+  const existingTags = Array.isArray(story.tags) ? story.tags.map(tagName).filter(Boolean) : [];
+  if (existingTags.includes(tag)) {
+    return story;
+  }
+
+  const updated = await taigaFetchOptional(`/userstories/${story.id}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      version: story.version,
+      tags: [...existingTags, tag]
+    })
+  });
+  if (updated?.error) {
+    console.warn(`warning: could not tag story ${story.subject}: ${updated.error}`);
+    return story;
+  }
+  return updated;
+}
+
 async function ensureStory(projectId, story, epicBySubject) {
   const existing = await findBySubject("/userstories", projectId, story.subject);
-  if (existing) return existing;
+  const moveTag = epicMoveTag(story.epic);
+  if (existing) return ensureStoryTag(existing, moveTag);
   const created = await taigaFetch("/userstories", {
     method: "POST",
     body: JSON.stringify({
       project: Number(projectId),
       subject: story.subject,
-      description: story.description
+      description: story.description,
+      tags: [moveTag]
     })
   });
   const epic = epicBySubject.get(story.epic);
@@ -170,7 +204,7 @@ async function ensureSandboxStatus(project) {
   const after = statuses.find(isInProgressStatus) ?? statuses[0];
   const sorted = [...statuses].sort((a, b) => Number(a.order ?? 0) - Number(b.order ?? 0));
   const afterIndex = after ? sorted.findIndex((status) => status.id === after.id) : -1;
-  const nextOrder = after ? Number(after.order ?? afterIndex + 1) + 0.5 : 1;
+  const nextOrder = after ? Math.floor(Number(after.order ?? afterIndex + 1)) + 1 : 1;
   const created = await taigaFetch("/userstory-statuses", {
     method: "POST",
     body: JSON.stringify({
