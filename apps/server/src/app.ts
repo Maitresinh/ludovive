@@ -1790,6 +1790,83 @@ function createParticipant(module: GameModule, input: z.infer<typeof createParti
   };
 }
 
+function createSessionInstance(module: GameModule): Session {
+  const code = makeCode();
+  const session: Session = {
+    code,
+    moduleId: module.id,
+    phaseIndex: 0,
+    phaseClock: phaseClock(module, 0, 1),
+    devices: [],
+    participants: [],
+    unlockedPhases: [module.phases[0].id],
+    risks: {},
+    statuses: { ...module.state },
+    sessionRoleAssignments: defaultSessionRoleAssignments(module),
+    componentPools: defaultComponentPools(module),
+    pendingResolutions: [],
+    exchanges: [],
+    messages: [],
+    nextAuditSequence: 1,
+    audit: []
+  };
+
+  audit(session, "session.created", { moduleId: module.id, phaseId: module.phases[0].id });
+  sessions.set(code, session);
+  return session;
+}
+
+function addDemoParticipant(
+  session: Session,
+  module: GameModule,
+  player: { name: string; roleId: string; sessionRoleId?: string }
+): { participant: Participant; device: Device } {
+  const participant = createParticipant(module, { name: player.name, kind: "person", roleId: player.roleId });
+  const device: Device = {
+    id: crypto.randomUUID(),
+    name: `Telephone ${player.name}`,
+    participantId: participant.id,
+    connected: true,
+    lastSeenAt: new Date().toISOString()
+  };
+  session.participants.push(participant);
+  session.devices.push(device);
+  audit(session, "device.registered", { deviceId: device.id, name: device.name });
+  audit(session, "participant.created", { participantId: participant.id, kind: participant.kind, name: participant.name });
+  audit(session, "participant.bound_to_device", { participantId: participant.id, deviceId: device.id });
+
+  if (player.sessionRoleId) {
+    assertSessionRoleAssignment(module, session, player.sessionRoleId, participant.id);
+    session.sessionRoleAssignments[player.sessionRoleId] = {
+      sessionRoleId: player.sessionRoleId,
+      participantId: participant.id,
+      enabled: true,
+      assignedAt: new Date().toISOString()
+    };
+    audit(session, "session_role.assigned", { sessionRoleId: player.sessionRoleId, participantId: participant.id });
+  }
+
+  return { participant, device };
+}
+
+function createPutschDemoSession(): Session {
+  const module = getModuleOrThrow("putsch-lite");
+  const session = createSessionInstance(module);
+  const players = [
+    { name: "Paquito", roleId: "facilitator-capitalist", sessionRoleId: "game-authority" },
+    { name: "James", roleId: "kgb-agent" },
+    { name: "Giani", roleId: "cia-agent" },
+    { name: "Raul", roleId: "fun-agent" },
+    { name: "Miltos", roleId: "gag-agent" }
+  ];
+  for (const player of players) {
+    addDemoParticipant(session, module, player);
+  }
+  const message = createSessionMessage(session, { target: "allParticipants", channel: "demo", text: "Le marche ouvre." });
+  audit(session, "message.sent", { message });
+  return session;
+}
+
 function renderIndex(): string {
   return `<!doctype html>
 <html lang="fr">
@@ -1996,13 +2073,6 @@ function renderIndex(): string {
     let sessionCode = "";
     let currentSession;
     let liveSocket;
-    const demoPlayers = [
-      { name: "Paquito", roleId: "facilitator-capitalist", sessionRoleId: "game-authority" },
-      { name: "James", roleId: "kgb-agent" },
-      { name: "Giani", roleId: "cia-agent" },
-      { name: "Raul", roleId: "fun-agent" },
-      { name: "Miltos", roleId: "gag-agent" }
-    ];
     function byId(id) { return document.querySelector("#" + id); }
     function setError(message) { byId("error").textContent = message || ""; }
     function option(value, label) { return '<option value="' + value + '">' + label + '</option>'; }
@@ -2375,22 +2445,13 @@ function renderIndex(): string {
       render(session);
     }));
     byId("seed").addEventListener("click", () => run(async () => {
-      byId("module").value = "putsch-lite";
-      await loadModuleDetails("putsch-lite");
-      const session = await api("/sessions", { method: "POST", body: JSON.stringify({ moduleId: "putsch-lite" }) });
+      const session = await api("/demo/putsch-lite", { method: "POST", body: JSON.stringify({}) });
+      byId("module").value = session.module.id;
+      await loadModuleDetails(session.module.id);
       sessionCode = session.code;
       byId("code").value = session.code;
       connectLive(session.code);
-      for (const player of demoPlayers) {
-        const participant = await api("/sessions/" + session.code + "/participants", { method: "POST", body: JSON.stringify({ name: player.name, roleId: player.roleId }) });
-        const device = await api("/sessions/" + session.code + "/devices", { method: "POST", body: JSON.stringify({ name: "Telephone " + player.name }) });
-        await api("/sessions/" + session.code + "/devices/" + device.device.id + "/bind", { method: "POST", body: JSON.stringify({ participantId: participant.participant.id }) });
-        if (player.sessionRoleId) {
-          await api("/sessions/" + session.code + "/session-roles/" + player.sessionRoleId, { method: "POST", body: JSON.stringify({ participantId: participant.participant.id }) });
-        }
-      }
-      await api("/sessions/" + session.code + "/messages", { method: "POST", body: JSON.stringify({ target: "allParticipants", channel: "demo", text: "Le marche ouvre." }) });
-      await refresh();
+      render(session);
     }));
     byId("createParticipant").addEventListener("click", () => run(async () => {
       await api("/sessions/" + sessionCode + "/participants", { method: "POST", body: JSON.stringify({ name: byId("participantName").value, roleId: byId("roleId").value }) });
@@ -2864,6 +2925,11 @@ app.get("/modules/:id", async (request, reply) => {
   return module;
 });
 
+app.post("/demo/putsch-lite", async (_request, reply) => {
+  const session = createPutschDemoSession();
+  return reply.code(201).send(dashboardReadModel(session));
+});
+
 app.post("/sessions", async (request, reply) => {
   const input = createSessionSchema.parse(request.body);
   const module = modules.get(input.moduleId);
@@ -2871,28 +2937,7 @@ app.post("/sessions", async (request, reply) => {
     return reply.code(400).send({ error: "Unknown module" });
   }
 
-  const code = makeCode();
-  const session: Session = {
-    code,
-    moduleId: module.id,
-    phaseIndex: 0,
-    phaseClock: phaseClock(module, 0, 1),
-    devices: [],
-    participants: [],
-    unlockedPhases: [module.phases[0].id],
-    risks: {},
-    statuses: { ...module.state },
-    sessionRoleAssignments: defaultSessionRoleAssignments(module),
-    componentPools: defaultComponentPools(module),
-    pendingResolutions: [],
-    exchanges: [],
-    messages: [],
-    nextAuditSequence: 1,
-    audit: []
-  };
-
-  audit(session, "session.created", { moduleId: module.id, phaseId: module.phases[0].id });
-  sessions.set(code, session);
+  const session = createSessionInstance(module);
   return reply.code(201).send(visibleSession(session));
 });
 

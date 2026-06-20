@@ -138,9 +138,7 @@ test("serves a one-page Putsch core demo dashboard", async () => {
   assert.match(response.body, /Copier lien participant/);
   assert.match(response.body, /navigator.clipboard/);
   assert.match(response.body, /Scenario Putsch test/);
-  assert.match(response.body, /Paquito/);
-  assert.match(response.body, /facilitator-capitalist/);
-  assert.match(response.body, /player.sessionRoleId/);
+  assert.match(response.body, /\/demo\/putsch-lite/);
   assert.match(response.body, /Echanges/);
   assert.match(response.body, /Controles de jeu/);
   assert.match(response.body, /id="gameControls"/);
@@ -212,6 +210,26 @@ test("serves a mobile participant app for session join", async () => {
   assert.match(response.body, /Aucune action disponible dans cette phase/);
   assert.doesNotMatch(response.body, /Afficher debug/);
   assert.doesNotMatch(response.body, /id="debugPanel"/);
+});
+
+test("creates a ready-to-play Putsch demo session", async () => {
+  const demo = await injectJson("POST", "/demo/putsch-lite", {});
+  const paquito = demo.participants.find((participant: JsonObject) => participant.name === "Paquito");
+
+  assert.equal(demo.readModel, "dashboard");
+  assert.equal(demo.module.id, "putsch-lite");
+  assert.equal(demo.participants.length, 5);
+  assert.equal(demo.devices.length, 5);
+  assert.equal(demo.devices.every((device: JsonObject) => Boolean(device.participantId)), true);
+  assert.equal(paquito.roleId, "facilitator-capitalist");
+  assert.equal(demo.sessionRoleAssignments["game-authority"].participantId, paquito.id);
+  assert.equal(demo.messages[0].text, "Le marche ouvre.");
+
+  const paquitoDevice = demo.devices.find((device: JsonObject) => device.participantId === paquito.id);
+  const readModel = await injectJson("GET", `/sessions/${demo.code}/read-models/device/${paquitoDevice.id}`);
+  assert.equal(readModel.readModel, "device.participant");
+  assert.equal(readModel.participant.id, paquito.id);
+  assert.equal(readModel.availableActions.some((action: JsonObject) => action.id === "trade-copper-shares"), true);
 });
 
 test("lets a participant join with a chosen role and receive a filtered read model", async () => {
