@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import Fastify from "fastify";
 import websocket from "@fastify/websocket";
@@ -276,10 +276,70 @@ type ActionAvailability = {
 const modules = new Map<string, GameModule>();
 const sessions = new Map<string, Session>();
 const liveClients = new Map<string, Set<{ audience: Audience; send: (payload: string) => void }>>();
+const pendingPersistence = new Set<Promise<void>>();
 
 export function resetRuntimeState(): void {
   sessions.clear();
   liveClients.clear();
+}
+
+function persistenceEnabled(): boolean {
+  return process.env.THAUMACORD_PERSISTENCE !== "false";
+}
+
+function persistenceDir(): string {
+  return process.env.THAUMACORD_DATA_DIR ?? path.resolve(process.cwd(), "../../.thaumacord/sessions");
+}
+
+function persistenceFilePath(code: string): string {
+  return path.join(persistenceDir(), `${code.toUpperCase()}.json`);
+}
+
+async function persistSession(session: Session): Promise<void> {
+  if (!persistenceEnabled()) {
+    return;
+  }
+  await mkdir(persistenceDir(), { recursive: true });
+  await writeFile(persistenceFilePath(session.code), JSON.stringify(session, null, 2), "utf8");
+}
+
+function schedulePersistSession(session: Session): void {
+  const task = persistSession(session)
+    .catch((error) => {
+      app.log.warn({ error, code: session.code }, "Session persistence failed");
+    })
+    .finally(() => {
+      pendingPersistence.delete(task);
+    });
+  pendingPersistence.add(task);
+}
+
+export async function flushSessionPersistence(): Promise<void> {
+  await Promise.all([...pendingPersistence]);
+}
+
+export async function loadPersistedSessions(): Promise<void> {
+  if (!persistenceEnabled()) {
+    return;
+  }
+
+  let files: string[];
+  try {
+    files = await readdir(persistenceDir());
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
+
+  for (const file of files.filter((candidate) => candidate.endsWith(".json"))) {
+    const raw = await readFile(path.join(persistenceDir(), file), "utf8");
+    const session = JSON.parse(raw) as Session;
+    if (session.code && modules.has(session.moduleId)) {
+      sessions.set(session.code.toUpperCase(), session);
+    }
+  }
 }
 
 const createSessionSchema = z.object({
@@ -584,6 +644,7 @@ function audit(session: Session, type: string, payload: unknown): void {
     type,
     payload
   });
+  schedulePersistSession(session);
 }
 
 function auditCatchUp(session: Session, after: number, limit: number): Record<string, unknown> {
@@ -2864,6 +2925,7 @@ function renderParticipantApp(): string {
 }
 
 await loadModules();
+await loadPersistedSessions();
 
 app.get("/", async (_request, reply) => reply.type("text/html").send(renderIndex()));
 app.get("/play", async (_request, reply) => reply.type("text/html").send(renderParticipantApp()));

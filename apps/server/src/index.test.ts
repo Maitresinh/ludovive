@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
-import { app, resetRuntimeState } from "./app.js";
+import { app, flushSessionPersistence, loadPersistedSessions, resetRuntimeState } from "./app.js";
 
 type JsonObject = Record<string, any>;
 let liveAddress = "";
@@ -426,6 +426,22 @@ test("returns a dashboard read model with the complete live state", async () => 
   assert.equal(dashboard.aggregates.participants.byRole.general, 1);
   assert.equal(dashboard.aggregates.resources.money.total, 20);
   assert.equal(dashboard.aggregates.resources.weapons.max, 2);
+});
+
+test("persists sessions to local storage and reloads them", async () => {
+  const session = await createSession("putsch-lite");
+  const code = session.code;
+  await createParticipant(code, "General", "general");
+  await flushSessionPersistence();
+
+  resetRuntimeState();
+  await loadPersistedSessions();
+
+  const restored = await injectJson("GET", `/sessions/${code}/read-models/dashboard`);
+  assert.equal(restored.code, code);
+  assert.equal(restored.module.id, "putsch-lite");
+  assert.equal(restored.participants[0].name, "General");
+  assert.equal(restored.audit.length, 2);
 });
 
 test("assigns monotonic audit sequence numbers within a session", async () => {
