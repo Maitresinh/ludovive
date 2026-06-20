@@ -120,6 +120,26 @@ const zoneSchema = z.object({
   effects: z.array(z.unknown()).default([])
 });
 
+const uiThemeSchema = z.object({
+  template: z.string().min(1).default("tabletop"),
+  tone: z.string().min(1).optional(),
+  colors: z.object({
+    background: z.string().optional(),
+    panel: z.string().optional(),
+    ink: z.string().optional(),
+    muted: z.string().optional(),
+    accent: z.string().optional(),
+    secondary: z.string().optional(),
+    success: z.string().optional(),
+    warning: z.string().optional()
+  }).default({}),
+  icons: z.record(z.string()).default({}),
+  interactionLabels: z.object({
+    primary: z.string().optional(),
+    fallback: z.string().optional()
+  }).default({})
+}).default({ template: "tabletop", colors: {}, icons: {}, interactionLabels: {} });
+
 const moduleSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -127,6 +147,7 @@ const moduleSchema = z.object({
   pitch: z.string().optional(),
   inspirationNotes: z.string().optional(),
   timeline: z.unknown().optional(),
+  uiTheme: uiThemeSchema,
   state: z.record(z.unknown()).default({}),
   players: z.object({
     min: z.number().int().positive(),
@@ -266,8 +287,10 @@ type ActionAvailability = {
   name: string;
   phase: string;
   gesture?: string;
+  gestureLabel?: string;
   fallback?: string;
   mechanicId?: string;
+  mechanicFamily?: string;
   inputs?: unknown[];
   available: boolean;
   blockedBy: string[];
@@ -1166,10 +1189,15 @@ function runTimedIncome(session: Session, effect: z.infer<typeof runTimedIncomeE
 }
 
 function runCastVote(session: Session, module: GameModule, participant: Participant, effect: z.infer<typeof castVoteEffectSchema>, event: EventInput): Record<string, unknown> {
-  const candidateId = typeof event.payload.candidateId === "string" ? event.payload.candidateId : undefined;
+  const promotionCandidateId = typeof event.payload.promotionCandidateId === "string" ? event.payload.promotionCandidateId : undefined;
+  const eliminationCandidateId = typeof event.payload.eliminationCandidateId === "string" ? event.payload.eliminationCandidateId : undefined;
+  const candidateId = typeof event.payload.candidateId === "string" ? event.payload.candidateId : promotionCandidateId;
   const votes = Number(event.payload.votes ?? 1);
   if (!candidateId || !participantExists(session, candidateId)) {
     throw new Error("Vote requires a known candidateId");
+  }
+  if (eliminationCandidateId && !participantExists(session, eliminationCandidateId)) {
+    throw new Error("Vote requires a known eliminationCandidateId");
   }
   if (!Number.isInteger(votes) || votes <= 0) {
     throw new Error("Vote count must be a positive integer");
@@ -1178,11 +1206,25 @@ function runCastVote(session: Session, module: GameModule, participant: Particip
   assertResourceChange(module, participant, effect.resource, -votes);
   const resourceChange = adjustResource(module, participant, effect.resource, -votes);
   const tally = objectRecord(session.statuses[effect.state]) ?? {};
-  const before = Number(tally[candidateId] ?? 0);
-  tally[candidateId] = before + votes;
+  if (promotionCandidateId || eliminationCandidateId) {
+    const promotion = objectRecord(tally.promotion) ?? {};
+    const elimination = objectRecord(tally.elimination) ?? {};
+    if (promotionCandidateId) {
+      promotion[promotionCandidateId] = Number(promotion[promotionCandidateId] ?? 0) + votes;
+    }
+    if (eliminationCandidateId) {
+      elimination[eliminationCandidateId] = Number(elimination[eliminationCandidateId] ?? 0) + votes;
+    }
+    tally.promotion = promotion;
+    tally.elimination = elimination;
+  } else {
+    const before = Number(tally[candidateId] ?? 0);
+    tally[candidateId] = before + votes;
+  }
   session.statuses[effect.state] = tally;
-  participant.statuses.lastVote = { candidateId, votes, at: new Date().toISOString() };
-  const leader = Object.entries(tally)
+  participant.statuses.lastVote = { candidateId, promotionCandidateId, eliminationCandidateId, votes, at: new Date().toISOString() };
+  const leaderSource = objectRecord(tally.promotion) ?? tally;
+  const leader = Object.entries(leaderSource)
     .map(([participantId, count]) => ({ participantId, votes: Number(count) }))
     .sort((a, b) => b.votes - a.votes)[0];
 
@@ -1191,6 +1233,8 @@ function runCastVote(session: Session, module: GameModule, participant: Particip
     resource: effect.resource,
     state: effect.state,
     candidateId,
+    promotionCandidateId,
+    eliminationCandidateId,
     votes,
     resourceChange,
     tally,
@@ -1602,6 +1646,21 @@ function resolveActionId(session: Session, event: EventInput): string | undefine
   return availableAction.id;
 }
 
+function knownGestureLabel(gesture: string): string {
+  const labels: Record<string, string> = {
+    "touch-phones": "toucher les telephones",
+    "pour-liquid": "verser vers le telephone de l'autre joueur",
+    "shake-phones": "serrer la main en mettant les telephones en contact",
+    "tap-stack": "poser le telephone sur la pile ou le titre",
+    "palm-cover": "couvrir l'ecran comme une transaction discrete",
+    "ballot-drop": "deposer le telephone comme un bulletin dans l'urne",
+    "strike-phone": "donner un coup d'epee avec le telephone",
+    "parry-phone": "parer avec le telephone",
+    "phone-face-down": "retourner le telephone face contre table"
+  };
+  return labels[gesture] ?? gesture;
+}
+
 function actorMatches(actionActor: string, participant: Participant): boolean {
   return actionActor === "*" || actionActor === "any" || participant.roleId === actionActor;
 }
@@ -1713,6 +1772,7 @@ function actionAvailability(session: Session, participant: Participant): ActionA
       name: action.name,
       phase: action.phase,
       gesture: action.gesture,
+      gestureLabel: action.gesture ? knownGestureLabel(action.gesture) : undefined,
       fallback: action.fallback,
       mechanicId: action.mechanicId,
       mechanicFamily: mechanic?.family,
@@ -1728,10 +1788,11 @@ function minimalReadModel(session: Session): Record<string, unknown> {
   return {
     code: session.code,
     readModel: "device.unbound",
-    module: {
-      id: module.id,
-      name: module.name,
-      resources: module.resources.map((resource) => ({
+      module: {
+        id: module.id,
+        name: module.name,
+        uiTheme: module.uiTheme,
+        resources: module.resources.map((resource) => ({
         id: resource.id,
         name: resource.name,
         visibility: resource.visibility
@@ -2047,6 +2108,7 @@ function participantReadModel(session: Session, participantId: string): Record<s
     module: {
       id: module.id,
       name: module.name,
+      uiTheme: module.uiTheme,
       resources: module.resources.map((resource) => ({
         id: resource.id,
         name: resource.name,
@@ -2173,7 +2235,7 @@ function renderIndex(): string {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Thaumacord Demo</title>
   <style>
-    :root { color-scheme: dark; --bg: #101214; --panel: #181b1f; --line: #343a42; --ink: #f2f4f5; --muted: #aab2bb; --accent: #b94b42; --blue: #315875; --green: #3f6b4d; }
+    :root { color-scheme: dark; --bg: #101214; --panel: #181b1f; --line: #343a42; --ink: #f2f4f5; --muted: #aab2bb; --accent: #b94b42; --blue: #315875; --green: #3f6b4d; --warning: #b88a3b; }
     * { box-sizing: border-box; }
     body { margin: 0; font-family: Arial, sans-serif; background: var(--bg); color: var(--ink); }
     main { width: min(1440px, 100%); margin: 0 auto; padding: 20px; }
@@ -2202,6 +2264,11 @@ function renderIndex(): string {
     .list label input[type="checkbox"] { width: auto; margin-right: 6px; }
     .item { border: 1px solid #2f353c; border-radius: 8px; padding: 10px; background: #111417; }
     .item strong { display: block; margin-bottom: 4px; }
+    .themeBanner { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, var(--panel)), var(--panel)); }
+    .gestureCue { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); border-radius: 999px; margin-top: 8px; color: var(--ink); background: color-mix(in srgb, var(--accent) 15%, transparent); font-size: 12px; }
+    .fallbackCue { color: var(--muted); font-size: 12px; margin-top: 4px; }
+    .action-contest { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+    .action-vote { border-color: color-mix(in srgb, var(--warning) 60%, var(--line)); }
     pre { white-space: pre-wrap; background: #0d0f11; padding: 12px; border-radius: 6px; overflow: auto; max-height: 420px; }
     details.debug { border: 1px solid var(--line); border-radius: 8px; background: #111417; padding: 10px; }
     details.debug summary { cursor: pointer; color: var(--muted); }
@@ -2241,6 +2308,7 @@ function renderIndex(): string {
 
         <section>
           <h2>Poste de conduite</h2>
+          <div id="themePanel" class="list"></div>
           <div id="mvpPanel" class="list"></div>
         </section>
 
@@ -2383,6 +2451,38 @@ function renderIndex(): string {
     function dashboardResourceLabel(session, resourceId) {
       return session.module.resources.find((resource) => resource.id === resourceId)?.name || resourceId;
     }
+    function dashboardComponentLabel(session, componentId) {
+      return (session.module.components || []).find((component) => component.id === componentId)?.name || componentId;
+    }
+    function applyTheme(theme) {
+      const colors = theme?.colors || {};
+      const root = document.documentElement;
+      const map = { background: "--bg", panel: "--panel", ink: "--ink", muted: "--muted", accent: "--accent", secondary: "--blue", success: "--green", warning: "--warning" };
+      Object.entries(map).forEach(([key, cssVar]) => { if (colors[key]) root.style.setProperty(cssVar, colors[key]); });
+    }
+    function themeIcon(session, key) {
+      return (session.module.uiTheme?.icons || {})[key] || "";
+    }
+    function interactionCue(session, action) {
+      const gestureLabels = {
+        "touch-phones": "toucher les telephones",
+        "pour-liquid": "verser vers le telephone de l'autre joueur",
+        "shake-phones": "serrer la main avec les telephones",
+        "tap-stack": "poser le telephone sur la pile ou le titre",
+        "palm-cover": "couvrir l'ecran pour une transaction discrete",
+        "ballot-drop": "deposer le telephone comme un bulletin",
+        "strike-phone": "donner un coup d'epee avec le telephone",
+        "parry-phone": "parer avec le telephone"
+      };
+      const primary = session.module.uiTheme?.interactionLabels?.primary || "Geste";
+      const fallback = session.module.uiTheme?.interactionLabels?.fallback || "Bouton de secours";
+      const gesture = action.gesture ? '<div class="gestureCue">' + themeIcon(session, action.mechanicFamily || action.id) + ' ' + primary + ': ' + (action.gestureLabel || gestureLabels[action.gesture] || action.gesture) + '</div>' : "";
+      return gesture + '<div class="fallbackCue">' + fallback + ': ' + (action.fallback || "confirmation manuelle") + '</div>';
+    }
+    function renderThemePanel(session) {
+      const theme = session.module.uiTheme || {};
+      return '<div class="item themeBanner"><strong>' + (theme.icons?.game || "") + ' Template ' + (theme.template || "tabletop") + '</strong><div>' + (theme.tone || "Style de table") + '</div><div class="muted">Couleurs, icones et libelles viennent du module importe.</div></div>';
+    }
     function formatStatusValue(value) {
       if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
       return JSON.stringify(value);
@@ -2487,8 +2587,8 @@ function renderIndex(): string {
       }).join("");
       const participants = aggregates.participants || {};
       const participantRow = '<div class="item"><strong>Participants</strong><div>Total: ' + (participants.total || 0) + '</div><div class="muted">Roles: ' + Object.entries(participants.byRole || {}).map(([roleId, count]) => dashboardRoleLabel(session, roleId) + " " + count).join(" / ") + '</div></div>';
-      const inventoryRows = Object.entries(aggregates.inventory || {}).map(([componentId, count]) => '<div class="item"><strong>' + componentId + '</strong><div>En main: ' + count + '</div></div>').join("");
-      const poolRows = Object.entries(aggregates.componentPools || {}).map(([componentId, pool]) => '<div class="item"><strong>' + componentId + '</strong><div>Restant: ' + pool.remaining + '</div><div class="muted">' + (pool.exhausted ? "epuise" : "disponible") + '</div></div>').join("");
+      const inventoryRows = Object.entries(aggregates.inventory || {}).map(([componentId, count]) => '<div class="item"><strong>' + dashboardComponentLabel(session, componentId) + '</strong><div>En main: ' + count + '</div></div>').join("");
+      const poolRows = Object.entries(aggregates.componentPools || {}).map(([componentId, pool]) => '<div class="item"><strong>' + dashboardComponentLabel(session, componentId) + '</strong><div>Restant: ' + pool.remaining + '</div><div class="muted">' + (pool.exhausted ? "epuise" : "disponible") + '</div></div>').join("");
       return [participantRow, resourceRows, inventoryRows, poolRows].filter(Boolean).join("") || '<div class="muted">Aucun agregat</div>';
     }
     function renderMvpPanel(session) {
@@ -2512,7 +2612,19 @@ function renderIndex(): string {
       return "";
     }
     function dashboardActionInputLabel(input) {
-      return input.label || input.name || input.id;
+      const labels = {
+        toParticipantId: "Receveur",
+        defenderId: "Cible",
+        leaderIds: "Leaders",
+        resources: "Ressources",
+        attendeeIds: "Presents",
+        embezzlement: "Detournement",
+        decisions: "Decisions",
+        promotionCandidateId: "Faire entrer au conseil",
+        eliminationCandidateId: "Eliminer du conseil",
+        votes: "Bulletins engages"
+      };
+      return input.label || input.name || labels[input.id] || input.id;
     }
     function dashboardActionParticipantOptions(session) {
       return session.participants
@@ -2525,6 +2637,9 @@ function renderIndex(): string {
       const label = dashboardActionInputLabel(input);
       if (input.type === "text") {
         return '<label>' + label + '</label><textarea data-live-input="' + input.id + '" placeholder="' + label + '"></textarea>';
+      }
+      if (input.type === "number") {
+        return '<label>' + label + '</label><input type="number" min="1" value="1" data-live-input="' + input.id + '" />';
       }
       if (input.type === "participant") {
         return '<label>' + label + '</label><select data-live-input="' + input.id + '">' + dashboardActionParticipantOptions(session) + '</select>';
@@ -2558,7 +2673,7 @@ function renderIndex(): string {
       const controls = (mechanic.inputs || []).map((input) => dashboardActionInputControl(session, input)).join("");
       const disabled = actors.length === 0 ? " disabled" : "";
       const hint = actors.length === 0 ? '<div class="muted">Aucun acteur autorise dans cette phase.</div>' : "";
-      return '<div class="item ' + cssClass + '"><strong>' + action.name + '</strong><div class="muted">' + (mechanic.summary || action.fallback || action.id) + '</div>' + hint + '<label>Acteur</label><select data-live-actor>' + actorOptions + '</select>' + controls + '<button class="secondary ' + buttonClass + '" data-action-id="' + action.id + '"' + disabled + '>' + buttonLabel + '</button></div>';
+      return '<div class="item ' + cssClass + ' action-' + (mechanic.family || "generic") + '"><strong>' + (themeIcon(session, mechanic.family || action.id) ? themeIcon(session, mechanic.family || action.id) + " " : "") + action.name + '</strong><div class="muted">' + (mechanic.summary || action.fallback || action.id) + '</div>' + interactionCue(session, { ...action, mechanicFamily: mechanic.family }) + hint + '<label>Acteur</label><select data-live-actor>' + actorOptions + '</select>' + controls + '<button class="secondary ' + buttonClass + '" data-action-id="' + action.id + '"' + disabled + '>' + buttonLabel + '</button></div>';
     }
     function renderGameControls(session) {
       const actions = (session.module.actions || []).filter((action) => {
@@ -2629,6 +2744,7 @@ function renderIndex(): string {
     }
     function render(session) {
       currentSession = session;
+      applyTheme(session.module.uiTheme);
       sessionCode = session.code;
       byId("code").value = session.code;
       byId("participantLink").href = "/play?code=" + encodeURIComponent(session.code);
@@ -2642,6 +2758,7 @@ function renderIndex(): string {
         Object.keys(session.statuses || {}).length ? renderStatusList(session.statuses) : ""
       ].join(" ");
       if (byId("coupCommitmentDuration")) byId("coupCommitmentDuration").value = session.statuses.coupCommitmentSeconds || 120;
+      byId("themePanel").innerHTML = renderThemePanel(session);
       byId("mvpPanel").innerHTML = renderMvpPanel(session);
       byId("participants").innerHTML = session.participants.map((participant) => {
         const resources = Object.entries(participant.resources).map(([key, value]) => dashboardResourceLabel(session, key) + ": " + value).join(" / ");
@@ -2865,7 +2982,7 @@ function renderParticipantApp(): string {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Thaumacord Participant</title>
   <style>
-    :root { color-scheme: dark; --bg: #101214; --panel: #181b1f; --line: #343a42; --ink: #f2f4f5; --muted: #aab2bb; --accent: #b94b42; --green: #3f6b4d; }
+    :root { color-scheme: dark; --bg: #101214; --panel: #181b1f; --line: #343a42; --ink: #f2f4f5; --muted: #aab2bb; --accent: #b94b42; --green: #3f6b4d; --blue: #315875; --warning: #b88a3b; }
     * { box-sizing: border-box; }
     body { margin: 0; font-family: Arial, sans-serif; background: var(--bg); color: var(--ink); }
     main { width: min(560px, 100%); margin: 0 auto; padding: 16px; }
@@ -2882,6 +2999,12 @@ function renderParticipantApp(): string {
     .pill { display: inline-block; padding: 4px 8px; border: 1px solid #59616b; border-radius: 999px; margin: 2px; font-size: 12px; color: #dce1e6; }
     .stack { display: grid; gap: 10px; }
     .item { border: 1px solid #2f353c; border-radius: 8px; padding: 10px; background: #111417; }
+    .themeStrip { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, var(--panel)), var(--panel)); }
+    .gestureCue { display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); border-radius: 999px; margin-top: 8px; background: color-mix(in srgb, var(--accent) 15%, transparent); font-size: 13px; }
+    .fallbackCue { color: var(--muted); font-size: 12px; margin-top: 4px; }
+    .action-exchange { border-color: color-mix(in srgb, var(--green) 55%, var(--line)); }
+    .action-contest { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); }
+    .action-vote { border-color: color-mix(in srgb, var(--warning) 60%, var(--line)); }
     .error { color: #ffb1a8; min-height: 20px; }
     .hidden { display: none; }
     pre { white-space: pre-wrap; background: #0d0f11; padding: 12px; border-radius: 6px; overflow: auto; max-height: 260px; }
@@ -2907,6 +3030,7 @@ function renderParticipantApp(): string {
 
     <section id="tablePanel" class="hidden">
       <h2 id="participantTitle">Participant</h2>
+      <div id="themeStrip" class="stack"></div>
       <div id="summary"></div>
       <div id="phaseClock" class="muted"></div>
       <h3>Role</h3>
@@ -2990,6 +3114,19 @@ function renderParticipantApp(): string {
     function resourceLabel(model, resourceId) {
       return model.module.resources.find((resource) => resource.id === resourceId)?.name || resourceId;
     }
+    function applyTheme(theme) {
+      const colors = theme?.colors || {};
+      const root = document.documentElement;
+      const map = { background: "--bg", panel: "--panel", ink: "--ink", muted: "--muted", accent: "--accent", secondary: "--blue", success: "--green", warning: "--warning" };
+      Object.entries(map).forEach(([key, cssVar]) => { if (colors[key]) root.style.setProperty(cssVar, colors[key]); });
+    }
+    function themeIcon(model, key) {
+      return (model.module.uiTheme?.icons || {})[key] || "";
+    }
+    function renderThemeStrip(model) {
+      const theme = model.module.uiTheme || {};
+      return '<div class="item themeStrip"><strong>' + (theme.icons?.game || "") + ' ' + model.module.name + '</strong><div class="muted">' + (theme.tone || "Partie en cours") + '</div></div>';
+    }
     function formatStatusValue(value) {
       if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
       return JSON.stringify(value);
@@ -3036,6 +3173,8 @@ function renderParticipantApp(): string {
         leaderIds: "Leaders",
         resources: "Ressources engagees",
         petitionText: "Demande",
+        promotionCandidateId: "Faire entrer au conseil",
+        eliminationCandidateId: "Eliminer du conseil",
         votes: "Vote"
       };
       return input.label || input.name || labels[input.id] || input.id;
@@ -3051,6 +3190,9 @@ function renderParticipantApp(): string {
       const label = actionInputLabel(input);
       if (input.type === "text") {
         return '<label>' + label + '</label><input data-action-input="' + input.id + '" placeholder="' + label + '" />';
+      }
+      if (input.type === "number") {
+        return '<label>' + label + '</label><input type="number" min="1" value="1" data-action-input="' + input.id + '" />';
       }
       if (input.type === "participant") {
         return '<label>' + label + '</label><select data-action-input="' + input.id + '">' + participantOptions(model, false) + '</select>';
@@ -3077,8 +3219,16 @@ function renderParticipantApp(): string {
     function actionHint(action) {
       if (action.mechanicFamily === "exchange") return "Action disponible pendant cette phase: le transfert sera controle par les regles.";
       if (action.mechanicFamily === "contest") return "Choisis la cible, les leaders et les ressources engagees.";
+      if (action.mechanicFamily === "vote") return "Choisis tes bulletins, ta promotion et ton elimination.";
       if (action.mechanicFamily === "petition") return "La demande sera envoyee au meneur pour resolution.";
       return action.fallback || action.id;
+    }
+    function interactionCue(model, action) {
+      const primary = model.module.uiTheme?.interactionLabels?.primary || "Geste";
+      const fallback = model.module.uiTheme?.interactionLabels?.fallback || "Bouton de secours";
+      const icon = themeIcon(model, action.mechanicFamily || action.id);
+      const gesture = action.gesture ? '<div class="gestureCue">' + icon + ' ' + primary + ': ' + (action.gestureLabel || action.gesture) + '</div>' : "";
+      return gesture + '<div class="fallbackCue">' + fallback + ': ' + (action.fallback || "confirmation manuelle") + '</div>';
     }
     function actionForm(model, action) {
       const inputs = action.inputs || [];
@@ -3117,7 +3267,9 @@ function renderParticipantApp(): string {
       }
       byId("joinPanel").classList.add("hidden");
       byId("tablePanel").classList.remove("hidden");
+      applyTheme(model.module.uiTheme);
       byId("participantTitle").textContent = model.participant.name;
+      byId("themeStrip").innerHTML = renderThemeStrip(model);
       byId("summary").innerHTML = [
         '<span class="pill">' + model.module.name + '</span>',
         '<span class="pill">Phase ' + model.phase.name + '</span>',
@@ -3135,7 +3287,7 @@ function renderParticipantApp(): string {
       }).join("") || '<div class="muted">Aucun echange</div>';
       byId("messages").innerHTML = (model.messages || []).slice(-5).map((message) => '<div class="item"><strong>' + message.channel + '</strong><div>' + message.text + '</div></div>').join("") || '<div class="muted">Aucun message</div>';
       byId("pendingResolutions").innerHTML = (model.pendingResolutions || []).map((resolution) => renderPendingResolution(model, resolution)).join("") || '<div class="muted">Rien a traiter</div>';
-      byId("actions").innerHTML = (model.availableActions || []).filter((action) => action.available).map((action) => '<div class="item actionCard action-' + (action.mechanicFamily || "generic") + '"><strong>' + action.name + '</strong><div class="muted">' + actionHint(action) + '</div>' + actionForm(model, action) + '<button class="secondary actionButton" data-action-id="' + action.id + '">' + actionVerb(action) + '</button></div>').join("") || '<div class="muted">Aucune action disponible dans cette phase</div>';
+      byId("actions").innerHTML = (model.availableActions || []).filter((action) => action.available).map((action) => '<div class="item actionCard action-' + (action.mechanicFamily || "generic") + '"><strong>' + (themeIcon(model, action.mechanicFamily || action.id) ? themeIcon(model, action.mechanicFamily || action.id) + " " : "") + action.name + '</strong><div class="muted">' + actionHint(action) + '</div>' + interactionCue(model, action) + actionForm(model, action) + '<button class="secondary actionButton" data-action-id="' + action.id + '">' + actionVerb(action) + '</button></div>').join("") || '<div class="muted">Aucune action disponible dans cette phase</div>';
     }
     byId("loadSession").addEventListener("click", () => run(loadSession));
     byId("join").addEventListener("click", () => run(async () => {

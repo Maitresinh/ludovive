@@ -8,6 +8,34 @@
     "councilPhaseId": "first-council",
     "copperPriceIncreasePerHour": 1000
   },
+  "uiTheme": {
+    "template": "political-pulp",
+    "tone": "Banana republic, mines de cuivre, faux papiers et coups de telephone nerveux.",
+    "colors": {
+      "background": "#12110d",
+      "panel": "#1d1a13",
+      "ink": "#f5ecd8",
+      "muted": "#c3b694",
+      "accent": "#b13f2e",
+      "secondary": "#3c5f63",
+      "success": "#4f6f3a",
+      "warning": "#c49a38"
+    },
+    "icons": {
+      "game": "▣",
+      "exchange": "⇄",
+      "contest": "⚔",
+      "vote": "◆",
+      "live-administration": "§",
+      "market": "$",
+      "intrigue": "!",
+      "council": "¶"
+    },
+    "interactionLabels": {
+      "primary": "Geste de table",
+      "fallback": "Secours tactile"
+    }
+  },
   "state": {
     "copperPrice": 1000,
     "firstCouncilDue": false,
@@ -248,7 +276,8 @@
       "phases": ["first-council"],
       "inputs": [
         { "id": "voterId", "type": "participant", "source": "actor-or-bound-device" },
-        { "id": "candidateId", "type": "participant" },
+        { "id": "promotionCandidateId", "type": "participant", "label": "Faire entrer au conseil" },
+        { "id": "eliminationCandidateId", "type": "participant", "label": "Eliminer du conseil" },
         { "id": "votes", "type": "number", "resource": "voteBallots" }
       ],
       "resolution": { "type": "tally", "state": "ministerElectionTally", "resource": "voteBallots" },
@@ -264,7 +293,7 @@
       "target": "player",
       "effect": { "type": "transferBundle", "resources": ["money", "weapons"] },
       "mechanicId": "direct-barter",
-      "gesture": "touch-phones",
+      "gesture": "pour-liquid",
       "fallback": "manual-confirmation"
     },
     {
@@ -286,7 +315,7 @@
       "target": "player",
       "effect": { "type": "transferBundle", "resources": ["money", "cf25", "cf50", "cf100", "cm25", "cm50", "cm100"] },
       "mechanicId": "direct-barter",
-      "gesture": "touch-phones",
+      "gesture": "pour-liquid",
       "fallback": "manual-confirmation"
     },
     {
@@ -297,7 +326,7 @@
       "target": "player",
       "effect": { "type": "transferBundle", "resources": ["money", "drugBags"] },
       "mechanicId": "direct-barter",
-      "gesture": "touch-phones",
+      "gesture": "palm-cover",
       "fallback": "manual-confirmation"
     },
     {
@@ -330,6 +359,7 @@
       "target": "game",
       "effect": { "type": "castVote", "resource": "voteBallots", "state": "ministerElectionTally" },
       "mechanicId": "minister-election",
+      "gesture": "ballot-drop",
       "fallback": "manual-confirmation"
     },
     {

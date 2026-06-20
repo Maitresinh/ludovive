@@ -145,6 +145,9 @@ test("serves a one-page Putsch core demo dashboard", async () => {
   assert.match(response.body, /Poste de conduite/);
   assert.match(response.body, /id="mvpPanel"/);
   assert.match(response.body, /renderMvpPanel/);
+  assert.match(response.body, /themePanel/);
+  assert.match(response.body, /renderThemePanel/);
+  assert.match(response.body, /interactionCue/);
   assert.match(response.body, /renderGameControls/);
   assert.match(response.body, /performGameAction/);
   assert.match(response.body, /Corriger/);
@@ -197,6 +200,8 @@ test("serves a mobile participant app for session join", async () => {
   assert.match(response.body, /Declencher/);
   assert.match(response.body, /id="roleDetails"/);
   assert.match(response.body, /renderRoleDetails/);
+  assert.match(response.body, /themeStrip/);
+  assert.match(response.body, /Geste/);
   assert.match(response.body, /id="statuses"/);
   assert.match(response.body, /renderStatuses/);
   assert.match(response.body, /actionInputControl/);
@@ -387,6 +392,9 @@ test("loads module mechanics and links actions to them", async () => {
   assert.equal(putsch.actions.find((action: JsonObject) => action.id === "record-minister-council").mechanicId, "minister-council-record");
   assert.equal(putsch.actions.find((action: JsonObject) => action.id === "defend-coup").effect.type, "contestResponse");
   assert.equal(putsch.actions.find((action: JsonObject) => action.id === "vote-minister-council").effect.type, "castVote");
+  assert.equal(putsch.uiTheme.template, "political-pulp");
+  assert.equal(putsch.actions.find((action: JsonObject) => action.id === "sell-weapons").gesture, "pour-liquid");
+  assert.equal(putsch.actions.find((action: JsonObject) => action.id === "sell-drugs").gesture, "palm-cover");
   assert.equal(putsch.components.find((component: JsonObject) => component.id === "vote-ballot").count, 80);
   const wolfpack = await injectJson("GET", "/modules/wolfpack-lite");
   assert.equal(wolfpack.sessionRoles.find((role: JsonObject) => role.id === "host").defaultRoleId, "captain");
@@ -1286,16 +1294,18 @@ test("runs Putsch minister election votes end to end", async () => {
     actionId: "vote-minister-council",
     participantId: voter.participant.id,
     payload: {
-      candidateId: candidate.participant.id,
+      promotionCandidateId: candidate.participant.id,
+      eliminationCandidateId: voter.participant.id,
       votes: 3
     }
   });
 
   assert.equal(vote.accepted, true);
   assert.equal(vote.actionResult.effect.type, "castVote");
-  assert.equal(vote.actionResult.effect.tally[candidate.participant.id], 3);
+  assert.equal(vote.actionResult.effect.tally.promotion[candidate.participant.id], 3);
+  assert.equal(vote.actionResult.effect.tally.elimination[voter.participant.id], 3);
   assert.equal(vote.actionResult.effect.leader.participantId, candidate.participant.id);
-  assert.equal(vote.dashboard.statuses.ministerElectionTally[candidate.participant.id], 3);
+  assert.equal(vote.dashboard.statuses.ministerElectionTally.promotion[candidate.participant.id], 3);
   assert.equal(vote.dashboard.participants.find((participant: JsonObject) => participant.id === voter.participant.id).resources.voteBallots, 5);
 });
 
@@ -1753,7 +1763,7 @@ test("resolves module gestures declared for any actor", async () => {
 
   assert.equal(actionResponse.statusCode, 202);
   const body = actionResponse.json<JsonObject>();
-  assert.equal(body.actionResult.actionId, "sell-weapons");
+  assert.equal(body.actionResult.actionId, "trade-copper-shares");
   assert.equal(body.actionResult.effect.type, "unsupported");
 });
 

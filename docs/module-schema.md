@@ -155,6 +155,20 @@ This is the first conceptual schema for importable Thaumacord modules.
 
 `state` can declare initial table-wide state such as market prices, council flags, panic levels, economic indicators, or other shared tracks. The session exposes this state to dashboard and participant read models.
 
+## UI Theme
+
+`uiTheme` lets an imported game carry its own table identity without hard-coding a new app.
+
+It can declare:
+
+- `template`: broad visual family, such as `political-pulp`, `court-intrigue`, `submarine-stations`, or `economic-simulation`;
+- `tone`: short flavour text displayed by the UI;
+- `colors`: background, panel, ink, muted, accent, secondary, success, warning;
+- `icons`: small action/family markers for exchange, contest, vote, live-administration, phases, or game-specific concepts;
+- `interactionLabels`: wording for primary gestures and fallback controls.
+
+Buttons remain available as fallback, but player-facing controls should first present the physical gesture declared by the action whenever possible.
+
 ## Session Roles
 
 `sessionRoles` separates table operation from in-fiction player roles. This matters because the person who opens a session is not always a classical GM.
