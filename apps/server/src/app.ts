@@ -1765,7 +1765,7 @@ function participantReadModel(session: Session, participantId: string): Record<s
     tableStatuses: session.statuses,
     participant,
     ownRole,
-    availableActions: actionAvailability(session, participant),
+    availableActions: actionAvailability(session, participant).filter((action) => action.available),
     pendingResolutions: session.pendingResolutions.filter((resolution) => resolution.participantId === participant.id),
     exchanges: session.exchanges.filter((exchange) => exchange.fromParticipantId === participant.id || exchange.toParticipantId === participant.id),
     messages: visibleMessagesForParticipant(session, participant.id),
@@ -1773,7 +1773,7 @@ function participantReadModel(session: Session, participantId: string): Record<s
       id: candidate.id,
       kind: candidate.kind,
       name: candidate.name,
-      roleId: candidate.roleId
+      roleId: candidate.id === participant.id ? candidate.roleId : undefined
     }))
   };
 }

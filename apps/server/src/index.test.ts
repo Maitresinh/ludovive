@@ -216,6 +216,7 @@ test("lets a participant join with a chosen role and receive a filtered read mod
     name: "Ana",
     roleId: "general"
   });
+  const other = await createParticipant(code, "Boris", "dealer");
 
   assert.equal(joined.sessionCode, code);
   assert.equal(joined.participant.name, "Ana");
@@ -233,6 +234,10 @@ test("lets a participant join with a chosen role and receive a filtered read mod
   assert.equal(joined.readModel.aggregates, undefined);
   assert.equal(joined.readModel.ownRole.name, "General");
   assert.equal(joined.readModel.tableStatuses.copperPrice, 1000);
+
+  const refreshed = await injectJson("GET", `/sessions/${code}/read-models/device/${joined.device.id}`);
+  assert.equal(refreshed.visibleParticipants.find((participant: JsonObject) => participant.id === joined.participant.id).roleId, "general");
+  assert.equal(refreshed.visibleParticipants.find((participant: JsonObject) => participant.id === other.participant.id).roleId, undefined);
 });
 
 test("lets the facilitator assign a role after participant join", async () => {
@@ -574,7 +579,7 @@ test("broadcasts device heartbeat updates to live audiences", async () => {
   assert.equal(deviceAudience.messages.at(-1)?.payload.payload.connected, false);
 });
 
-test("exposes participant actions with availability reasons", async () => {
+test("filters participant actions to the current playable menu", async () => {
   const session = await createSession();
   const code = session.code;
   const device = await createDevice(code, "Telephone machine");
@@ -583,8 +588,7 @@ test("exposes participant actions with availability reasons", async () => {
 
   const briefingModel = await injectJson("GET", `/sessions/${code}/read-models/device/${device.device.id}`);
   const quietInBriefing = briefingModel.availableActions.find((action: JsonObject) => action.id === "quiet-engines");
-  assert.equal(quietInBriefing.available, false);
-  assert.deepEqual(quietInBriefing.blockedBy, ["phase", "resource:battery"]);
+  assert.equal(quietInBriefing, undefined);
 
   await setResource(code, participant.participant.id, "battery", 1);
   await advancePhase(code);
@@ -596,8 +600,7 @@ test("exposes participant actions with availability reasons", async () => {
   assert.deepEqual(quietRunning.blockedBy, []);
   assert.equal(quietRunning.gesture, "phone-face-down");
   assert.equal(quietRunning.mechanicId, "station-action");
-  assert.equal(sonarSweep.available, false);
-  assert.equal(sonarSweep.blockedBy.includes("role"), true);
+  assert.equal(sonarSweep, undefined);
 });
 
 test("exposes mechanic inputs on participant action read models", async () => {
