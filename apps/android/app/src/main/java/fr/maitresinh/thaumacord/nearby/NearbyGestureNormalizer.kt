@@ -1,19 +1,18 @@
 package fr.maitresinh.thaumacord.nearby
 
+import fr.maitresinh.thaumacord.gesture.GestureNormalizer
+import fr.maitresinh.thaumacord.gesture.GestureTransport
+
 class NearbyGestureNormalizer {
+    private val normalizer = GestureNormalizer()
+
     fun phoneTouch(
         sessionCode: String,
         sourceDeviceId: String,
         peerDeviceId: String,
         confidence: Float
     ): NearbyGestureEvent =
-        NearbyGestureEvent(
-            sessionCode = sessionCode,
-            sourceDeviceId = sourceDeviceId,
-            peerDeviceId = peerDeviceId,
-            gesture = "touch-phones",
-            confidence = confidence
-        )
+        normalizer.phoneTouch(sessionCode, sourceDeviceId, peerDeviceId, GestureTransport.NearbyConnections, confidence)
 
     fun pourTowardPeer(
         sessionCode: String,
@@ -21,13 +20,7 @@ class NearbyGestureNormalizer {
         peerDeviceId: String,
         confidence: Float
     ): NearbyGestureEvent =
-        NearbyGestureEvent(
-            sessionCode = sessionCode,
-            sourceDeviceId = sourceDeviceId,
-            peerDeviceId = peerDeviceId,
-            gesture = "pour-liquid",
-            confidence = confidence
-        )
+        normalizer.pourTowardPeer(sessionCode, sourceDeviceId, peerDeviceId, confidence)
 
     fun strikePeer(
         sessionCode: String,
@@ -35,12 +28,13 @@ class NearbyGestureNormalizer {
         peerDeviceId: String,
         confidence: Float
     ): NearbyGestureEvent =
-        NearbyGestureEvent(
-            sessionCode = sessionCode,
-            sourceDeviceId = sourceDeviceId,
-            peerDeviceId = peerDeviceId,
-            gesture = "strike-phone",
-            confidence = confidence
-        )
-}
+        normalizer.strikePeer(sessionCode, sourceDeviceId, peerDeviceId, confidence)
 
+    fun parryPeer(
+        sessionCode: String,
+        sourceDeviceId: String,
+        peerDeviceId: String,
+        confidence: Float
+    ): NearbyGestureEvent =
+        normalizer.parryPeer(sessionCode, sourceDeviceId, peerDeviceId, confidence)
+}

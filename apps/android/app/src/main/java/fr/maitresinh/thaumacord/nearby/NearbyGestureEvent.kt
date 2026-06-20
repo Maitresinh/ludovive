@@ -1,31 +1,26 @@
 package fr.maitresinh.thaumacord.nearby
 
-data class NearbyGestureEvent(
-    val sessionCode: String,
-    val sourceDeviceId: String,
-    val peerDeviceId: String?,
-    val gesture: String,
-    val confidence: Float,
-    val payload: Map<String, String> = emptyMap()
-) {
-    init {
-        require(sessionCode.isNotBlank()) { "sessionCode is required" }
-        require(sourceDeviceId.isNotBlank()) { "sourceDeviceId is required" }
-        require(gesture.isNotBlank()) { "gesture is required" }
-        require(confidence in 0f..1f) { "confidence must be between 0 and 1" }
-    }
+import fr.maitresinh.thaumacord.gesture.CanonicalGestureEvent
+import fr.maitresinh.thaumacord.gesture.GestureProximity
+import fr.maitresinh.thaumacord.gesture.GestureTransport
 
-    fun toThaumacordPayload(): Map<String, Any> =
-        mapOf(
-            "type" to "gesture.detected",
-            "gesture" to gesture,
-            "sourceDeviceId" to sourceDeviceId,
-            "payload" to buildMap {
-                put("transport", "nearby-connections")
-                put("confidence", confidence)
-                peerDeviceId?.let { put("peerDeviceId", it) }
-                putAll(payload)
-            }
-        )
-}
+typealias NearbyGestureEvent = CanonicalGestureEvent
 
+fun nearbyGestureEvent(
+    sessionCode: String,
+    sourceDeviceId: String,
+    peerDeviceId: String?,
+    gesture: String,
+    confidence: Float,
+    payload: Map<String, String> = emptyMap()
+): NearbyGestureEvent =
+    CanonicalGestureEvent(
+        sessionCode = sessionCode,
+        sourceDeviceId = sourceDeviceId,
+        targetDeviceId = peerDeviceId,
+        gesture = gesture,
+        proximity = if (peerDeviceId != null) GestureProximity.Near else GestureProximity.Unknown,
+        transport = GestureTransport.NearbyConnections,
+        confidence = confidence,
+        payload = payload
+    )

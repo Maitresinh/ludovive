@@ -13,6 +13,7 @@ const plan = {
     "Action and Rule Events",
     "Operational Putsch MVP",
     "Putsch MVP+",
+    "Android Real Gestures",
     "Persistence and Reconnect"
   ],
   stories: [
@@ -75,6 +76,31 @@ const plan = {
       subject: "Putsch MVP+ demo mode supports a 60-90 minute playtest",
       epic: "Putsch MVP+",
       description: "Provide seeded roles, resettable demo data, a facilitator checklist, critical rule tests, reconnect checks, and an exportable play log for a real table test."
+    },
+    {
+      subject: "G1 canonical Android gesture event",
+      epic: "Android Real Gestures",
+      description: "Define one normalized Android gesture event with gesture, proximity, sourceDeviceId, targetDeviceId, transport, confidence, and payload, then convert it to the Thaumacord server event shape."
+    },
+    {
+      subject: "G2 proximity layer requires close phones for exchanges",
+      epic: "Android Real Gestures",
+      description: "Normalize Nearby Connections, BLE, NFC, QR, and manual fallback into proximity near so player-to-player exchanges cannot happen from another room."
+    },
+    {
+      subject: "G3 sensor gesture classifier covers table motions",
+      epic: "Android Real Gestures",
+      description: "Classify pour, strike, parry, shake, face-down, ballot-drop, and tap-stack style motions with confidence while leaving rule resolution to the server."
+    },
+    {
+      subject: "G4 Android gesture transport sends events to server",
+      epic: "Android Real Gestures",
+      description: "Post canonical gesture events to /sessions/:code/events and surface server acceptance or rejection to the Android UI."
+    },
+    {
+      subject: "G5 two-phone gesture playtest proves no remote trades",
+      epic: "Android Real Gestures",
+      description: "Run a table playtest where two devices join a session, establish contact, perform an exchange gesture, and verify cross-room transactions fail."
     }
   ]
 };

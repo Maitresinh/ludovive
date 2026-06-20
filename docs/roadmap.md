@@ -80,6 +80,8 @@ Detailed programme: [MVP+ Putsch](mvp-plus-putsch.md)
 - Prototype tilt transfer.
 - Prototype strike/parry gesture as optional non-critical interaction.
 
+Detailed Android gesture sprint programme: [Android Real Gestures Sprints](android-real-gestures-sprints.md)
+
 ## Sprint 6+: Hybrid Mapping
 
 - Define zones.
