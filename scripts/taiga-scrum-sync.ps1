@@ -1,5 +1,5 @@
 param(
-  [ValidateSet("audit", "apply", "discover")]
+  [ValidateSet("audit", "apply", "discover", "sandbox-statuses")]
   [string]$Command = "audit"
 )
 
@@ -15,7 +15,7 @@ if (-not $env:TAIGA_USERNAME) {
   $env:TAIGA_USERNAME = "Maitresinh"
 }
 
-if ($Command -eq "apply" -and -not $env:TAIGA_AUTH_TOKEN -and -not $env:TAIGA_PASSWORD) {
+if ($Command -ne "audit" -and -not $env:TAIGA_AUTH_TOKEN -and -not $env:TAIGA_PASSWORD) {
   $secure = Read-Host "Taiga password" -AsSecureString
   $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
   try {

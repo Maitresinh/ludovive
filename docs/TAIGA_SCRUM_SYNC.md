@@ -19,6 +19,7 @@ Then run:
 ./scripts/taiga-scrum-sync.ps1 -Command audit
 ./scripts/taiga-scrum-sync.ps1 -Command discover
 ./scripts/taiga-scrum-sync.ps1 -Command apply
+./scripts/taiga-scrum-sync.ps1 -Command sandbox-statuses
 ```
 
 The PowerShell wrapper asks for the Taiga password as a `SecureString` when `TAIGA_AUTH_TOKEN` and `TAIGA_PASSWORD` are not set.
@@ -26,6 +27,8 @@ The PowerShell wrapper asks for the Taiga password as a `SecureString` when `TAI
 If `TAIGA_PROJECT_ID` is not set, the Node script tries to resolve the project from `TAIGA_PROJECT_SLUG`. For private Taiga projects, this still requires authentication.
 
 Use `discover` to list the projects visible to `TAIGA_USERNAME` when the slug is not obvious from the Taiga URL.
+
+Use `sandbox-statuses` to create a `Sandbox` user-story status on every visible project, placed after `En cours` / `In progress` when that status exists.
 
 ## Planned Backlog
 

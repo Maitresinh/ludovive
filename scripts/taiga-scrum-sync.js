@@ -131,7 +131,7 @@ async function ensureStory(projectId, story, epicBySubject) {
   });
   const epic = epicBySubject.get(story.epic);
   if (epic?.id && created?.id) {
-    await taigaFetch("/epic-userstories", {
+    const link = await taigaFetchOptional("/epic-userstories", {
       method: "POST",
       body: JSON.stringify({
         project: Number(projectId),
@@ -139,8 +139,63 @@ async function ensureStory(projectId, story, epicBySubject) {
         user_story: created.id
       })
     });
+    if (link?.error) {
+      console.warn(`warning: could not link story to epic on this Taiga instance: ${story.subject}`);
+    }
   }
   return created;
+}
+
+function normalizeName(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function isInProgressStatus(status) {
+  const name = normalizeName(status.name);
+  return name === "en cours" || name === "in progress" || name === "doing" || name.includes("cours");
+}
+
+async function ensureSandboxStatus(project) {
+  const projectId = project.id;
+  const statuses = await taigaFetch(`/userstory-statuses?project=${projectId}`);
+  const existing = statuses.find((status) => normalizeName(status.name) === "sandbox");
+  if (existing) {
+    return { project, status: existing, action: "exists" };
+  }
+
+  const after = statuses.find(isInProgressStatus) ?? statuses[0];
+  const sorted = [...statuses].sort((a, b) => Number(a.order ?? 0) - Number(b.order ?? 0));
+  const afterIndex = after ? sorted.findIndex((status) => status.id === after.id) : -1;
+  const nextOrder = after ? Number(after.order ?? afterIndex + 1) + 0.5 : 1;
+  const created = await taigaFetch("/userstory-statuses", {
+    method: "POST",
+    body: JSON.stringify({
+      project: Number(projectId),
+      name: "Sandbox",
+      color: "#8E44AD",
+      order: nextOrder,
+      is_closed: false
+    })
+  });
+
+  return { project, status: created, action: "created", after };
+}
+
+async function ensureSandboxStatuses() {
+  const discovered = await discoverProjects();
+  const results = [];
+  for (const project of discovered.projects) {
+    try {
+      results.push(await ensureSandboxStatus(project));
+    } catch (error) {
+      results.push({ project, action: "failed", error: error.message });
+    }
+  }
+  return results;
 }
 
 function audit() {
@@ -252,6 +307,20 @@ if (command === "audit") {
     console.log(JSON.stringify(result, null, 2));
   }).catch((error) => {
     console.error(error.message);
+      process.exit(1);
+    });
+} else if (command === "sandbox-statuses") {
+  ensureSandboxStatuses().then((results) => {
+    for (const result of results) {
+      if (result.action === "failed") {
+        console.log(`failed: ${result.project.name} (${result.project.id}) - ${result.error}`);
+      } else {
+        const after = result.after ? ` after ${result.after.name}` : "";
+        console.log(`${result.action}: ${result.project.name} (${result.project.id}) -> ${result.status.name}${after}`);
+      }
+    }
+  }).catch((error) => {
+    console.error(error.message);
     process.exit(1);
   });
 } else if (command === "apply") {
@@ -260,6 +329,6 @@ if (command === "audit") {
     process.exit(1);
   });
 } else {
-  console.error("Usage: taiga-scrum-sync.js audit|discover|apply");
+  console.error("Usage: taiga-scrum-sync.js audit|discover|apply|sandbox-statuses");
   process.exit(1);
 }
