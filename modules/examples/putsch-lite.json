@@ -13,7 +13,9 @@
     "firstCouncilDue": false,
     "sharesAvailableThisHour": 20,
     "sharesPerBuyerLimit": 5,
-    "directorSharesForSalePerHour": 6
+    "directorSharesForSalePerHour": 6,
+    "coupCommitmentSeconds": 120,
+    "ministerElectionTally": {}
   },
   "players": {
     "min": 4,
@@ -126,6 +128,17 @@
       "victoryCondition": { "type": "text", "text": "Prendre puis conserver le pouvoir; le camp au pouvoir en fin de partie double son total." }
     }
   ],
+  "components": [
+    { "id": "cf25-card", "name": "Carte 25 caisses de fusils", "kind": "resource-card", "count": 25, "visibility": "private", "tags": ["weapon", "putsch"] },
+    { "id": "cf50-card", "name": "Carte 50 caisses de fusils", "kind": "resource-card", "count": 20, "visibility": "private", "tags": ["weapon", "putsch"] },
+    { "id": "cf100-card", "name": "Carte 100 caisses de fusils", "kind": "resource-card", "count": 5, "visibility": "private", "tags": ["weapon", "putsch"] },
+    { "id": "cm25-card", "name": "Carte 25 caisses de munitions", "kind": "resource-card", "count": 30, "visibility": "private", "tags": ["ammo", "putsch"] },
+    { "id": "cm50-card", "name": "Carte 50 caisses de munitions", "kind": "resource-card", "count": 10, "visibility": "private", "tags": ["ammo", "putsch"] },
+    { "id": "cm100-card", "name": "Carte 100 caisses de munitions", "kind": "resource-card", "count": 10, "visibility": "private", "tags": ["ammo", "putsch"] },
+    { "id": "copper-share-card", "name": "Action des mines de cuivre", "kind": "share-card", "count": 50, "visibility": "private", "tags": ["market", "copper"] },
+    { "id": "drug-bag-card", "name": "Sac de drogue", "kind": "contraband-card", "count": 15, "visibility": "private", "tags": ["contraband"] },
+    { "id": "vote-ballot", "name": "Bulletin de vote", "kind": "ballot", "count": 80, "visibility": "private", "tags": ["election", "council"] }
+  ],
   "mechanics": [
     {
       "id": "direct-barter",
@@ -226,6 +239,20 @@
         { "id": "post-coup", "name": "Conseil apres coup d'Etat", "trigger": "firstCouncilDue" },
         { "id": "regular-hourly", "name": "Conseil regulier", "trigger": "regularCouncilEverySeconds" }
       ]
+    },
+    {
+      "id": "minister-election",
+      "name": "Election du conseil",
+      "family": "vote",
+      "summary": "Chaque joueur depense des bulletins de vote pour designer les conseillers; le tableau cumule les suffrages.",
+      "phases": ["first-council"],
+      "inputs": [
+        { "id": "voterId", "type": "participant", "source": "actor-or-bound-device" },
+        { "id": "candidateId", "type": "participant" },
+        { "id": "votes", "type": "number", "resource": "voteBallots" }
+      ],
+      "resolution": { "type": "tally", "state": "ministerElectionTally", "resource": "voteBallots" },
+      "visibility": { "dashboard": "full", "participants": "own-vote-and-public-tally" }
     }
   ],
   "actions": [
@@ -282,6 +309,27 @@
       "effect": { "type": "contestedBid", "resources": ["weapons", "ammo", "influence"] },
       "mechanicId": "contested-coup",
       "gesture": "strike-phone",
+      "fallback": "manual-confirmation"
+    },
+    {
+      "id": "defend-coup",
+      "name": "Engager la defense du coup d'Etat",
+      "phase": "coup",
+      "actor": "any",
+      "target": "game",
+      "effect": { "type": "contestResponse", "resources": ["weapons", "ammo", "influence"] },
+      "mechanicId": "contested-coup",
+      "gesture": "parry-phone",
+      "fallback": "manual-confirmation"
+    },
+    {
+      "id": "vote-minister-council",
+      "name": "Voter pour le conseil",
+      "phase": "first-council",
+      "actor": "any",
+      "target": "game",
+      "effect": { "type": "castVote", "resource": "voteBallots", "state": "ministerElectionTally" },
+      "mechanicId": "minister-election",
       "fallback": "manual-confirmation"
     },
     {

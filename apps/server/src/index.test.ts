@@ -179,6 +179,8 @@ test("serves a one-page Putsch core demo dashboard", async () => {
   assert.match(response.body, /data-resolution-state/);
   assert.match(response.body, /Marquer resolue/);
   assert.match(response.body, /Regler minuteur/);
+  assert.match(response.body, /Duree engagements putsch/);
+  assert.match(response.body, /setCoupCommitmentDuration/);
 });
 
 test("serves a mobile participant app for session join", async () => {
@@ -208,6 +210,9 @@ test("serves a mobile participant app for session join", async () => {
   assert.match(response.body, /data-action-input/);
   assert.match(response.body, /Actions de cette phase/);
   assert.match(response.body, /Aucune action disponible dans cette phase/);
+  assert.match(response.body, /A traiter/);
+  assert.match(response.body, /formatDeadline/);
+  assert.match(response.body, /pendingResolutions/);
   assert.doesNotMatch(response.body, /Afficher debug/);
   assert.doesNotMatch(response.body, /id="debugPanel"/);
 });
@@ -356,7 +361,7 @@ test("loads module mechanics and links actions to them", async () => {
   const wolfpackSummary = modules.find((module: JsonObject) => module.id === "wolfpack-lite");
   const kingSummary = modules.find((module: JsonObject) => module.id === "long-live-the-king-lite");
 
-  assert.equal(putschSummary.mechanics, 3);
+  assert.equal(putschSummary.mechanics, 4);
   assert.equal(putschSummary.sessionRoles, 2);
   assert.equal(wolfpackSummary.mechanics, 3);
   assert.equal(kingSummary.components, 6);
@@ -378,7 +383,11 @@ test("loads module mechanics and links actions to them", async () => {
   assert.equal(putsch.sessionRoles.find((role: JsonObject) => role.id === "host").canInjectGameElements, false);
   assert.equal(putsch.sessionRoles.find((role: JsonObject) => role.id === "game-authority").defaultRoleId, "facilitator-capitalist");
   assert.equal(putsch.mechanics.find((mechanic: JsonObject) => mechanic.id === "minister-council-record").family, "live-administration");
+  assert.equal(putsch.mechanics.find((mechanic: JsonObject) => mechanic.id === "minister-election").family, "vote");
   assert.equal(putsch.actions.find((action: JsonObject) => action.id === "record-minister-council").mechanicId, "minister-council-record");
+  assert.equal(putsch.actions.find((action: JsonObject) => action.id === "defend-coup").effect.type, "contestResponse");
+  assert.equal(putsch.actions.find((action: JsonObject) => action.id === "vote-minister-council").effect.type, "castVote");
+  assert.equal(putsch.components.find((component: JsonObject) => component.id === "vote-ballot").count, 80);
   const wolfpack = await injectJson("GET", "/modules/wolfpack-lite");
   assert.equal(wolfpack.sessionRoles.find((role: JsonObject) => role.id === "host").defaultRoleId, "captain");
   assert.equal(wolfpack.sessionRoles.find((role: JsonObject) => role.id === "host").canInjectGameElements, false);
@@ -1160,7 +1169,7 @@ test("opens pending contest resolutions from module mechanics", async () => {
       type: "action.requested",
       actionId: "attempt-coup",
       sourceDeviceId: device.device.id,
-      payload: { defenderId: "pending-defender", leaderIds: ["leader-a", "leader-b"] }
+      payload: { defenderId: "pending-defender", leaderIds: ["leader-a", "leader-b"], resources: { weapons: 1, ammo: 1 } }
     }
   });
 
@@ -1169,10 +1178,14 @@ test("opens pending contest resolutions from module mechanics", async () => {
   assert.equal(body.actionResult.effect.type, "pendingResolution");
   assert.equal(body.actionResult.effect.mechanicId, "contested-coup");
   assert.equal(body.actionResult.effect.mechanicFamily, "contest");
+  assert.equal(body.actionResult.effect.resourceChanges.length, 2);
   assert.equal(body.dashboard.pendingResolutions[0].type, "contestedBid");
   assert.equal(body.dashboard.pendingResolutions[0].resolution.type, "sealedCommitment");
   assert.equal(body.dashboard.pendingResolutions[0].participantId, participant.participant.id);
   assert.deepEqual(body.dashboard.pendingResolutions[0].payload.leaderIds, ["leader-a", "leader-b"]);
+  assert.equal(body.dashboard.pendingResolutions[0].payload.commitments.attacker.total, 2);
+  assert.equal(body.dashboard.pendingResolutions[0].payload.commitmentDeadline.durationSeconds, 120);
+  assert.equal(typeof body.dashboard.pendingResolutions[0].payload.commitmentDeadline.endsAt, "string");
   assert.deepEqual(
     body.dashboard.pendingResolutions[0].recommendedOutcomes.map((outcome: JsonObject) => outcome.id),
     ["attacker-wins", "defender-wins", "tie-facilitator"]
@@ -1185,6 +1198,39 @@ test("opens pending contest resolutions from module mechanics", async () => {
   assert.equal(body.dashboard.pendingResolutions[0].recommendedOutcomes[0].effects[1].type, "scaleSessionCounter");
   assert.equal(body.dashboard.pendingResolutions[0].recommendedOutcomes[0].effects[1].state, "copperPrice");
   assert.equal(body.dashboard.pendingResolutions[0].recommendedOutcomes[0].effects[1].factor, 0.5);
+});
+
+test("uses facilitator-configured coup countdown for hidden commitments", async () => {
+  const session = await createSession("putsch-lite");
+  const code = session.code;
+  const director = await createParticipant(code, "Paquito", "facilitator-capitalist");
+  const attacker = await createParticipant(code, "General", "general");
+  const defender = await createParticipant(code, "Marchand", "dealer");
+  await injectJson("POST", `/sessions/${code}/session-roles/game-authority`, {
+    participantId: director.participant.id
+  });
+  await injectJson("POST", `/sessions/${code}/state`, {
+    state: "coupCommitmentSeconds",
+    value: 45
+  });
+  await advancePhase(code);
+  await advancePhase(code);
+
+  const coup = await injectJson("POST", `/sessions/${code}/events`, {
+    type: "action.requested",
+    actionId: "attempt-coup",
+    participantId: attacker.participant.id,
+    payload: {
+      defenderId: defender.participant.id,
+      leaderIds: [attacker.participant.id, defender.participant.id],
+      resources: { weapons: 1, ammo: 1 }
+    }
+  });
+
+  assert.equal(coup.dashboard.pendingResolutions[0].payload.commitmentDeadline.durationSeconds, 45);
+  const defenderModel = await injectJson("GET", `/sessions/${code}/read-models/participant/${defender.participant.id}`);
+  assert.equal(defenderModel.pendingResolutions[0].payload.commitmentDeadline.durationSeconds, 45);
+  assert.equal(defenderModel.availableActions.some((action: JsonObject) => action.id === "defend-coup"), true);
 });
 
 test("opens pending live administration records for Putsch council results", async () => {
@@ -1212,26 +1258,45 @@ test("opens pending live administration records for Putsch council results", asy
   });
 
   assert.equal(council.accepted, true);
-  assert.equal(council.actionResult.effect.type, "pendingResolution");
+  assert.equal(council.actionResult.effect.type, "autoResolvedLiveAdministration");
   assert.equal(council.actionResult.effect.mechanicId, "minister-council-record");
-  assert.equal(council.actionResult.effect.mechanicFamily, "live-administration");
-  assert.equal(council.dashboard.pendingResolutions[0].summary, "Paquito: conseil avec Paquito, General");
-  assert.equal(council.dashboard.pendingResolutions[0].payload.decisions, "Le conseil valide un detournement et ajourne le prochain tour.");
-  assert.deepEqual(council.dashboard.pendingResolutions[0].payload.embezzlement, { money: 5000 });
+  assert.equal(council.actionResult.effect.resolveResult.outcome, "facilitator-resolved");
   assert.deepEqual(
-    council.dashboard.pendingResolutions[0].automaticEffects.map((effect: JsonObject) => effect.type),
+    council.actionResult.effect.resolveResult.effects.map((effect: JsonObject) => effect.type),
     ["setSessionState", "adjustResource"]
   );
+  assert.equal(council.dashboard.statuses.firstCouncilDue, false);
+  assert.equal(council.dashboard.pendingResolutions.length, 0);
+  assert.equal(council.dashboard.participants.find((candidate: JsonObject) => candidate.id === director.participant.id).resources.money, 5000);
+  assert.equal(council.dashboard.messages.at(-1).target, "allParticipants");
+});
 
-  const resolved = await injectJson("POST", `/sessions/${code}/resolutions/${council.dashboard.pendingResolutions[0].id}/resolve`, {
-    outcome: "facilitator-resolved",
-    note: "Compte rendu valide."
+test("runs Putsch minister election votes end to end", async () => {
+  const session = await createSession("putsch-lite");
+  const code = session.code;
+  const voter = await createParticipant(code, "James", "kgb-agent");
+  const candidate = await createParticipant(code, "Raul", "fun-agent");
+  await advancePhase(code);
+  await advancePhase(code);
+  await advancePhase(code);
+  await advancePhase(code);
+
+  const vote = await injectJson("POST", `/sessions/${code}/events`, {
+    type: "action.requested",
+    actionId: "vote-minister-council",
+    participantId: voter.participant.id,
+    payload: {
+      candidateId: candidate.participant.id,
+      votes: 3
+    }
   });
 
-  assert.equal(resolved.resolveResult.effects.find((effect: JsonObject) => effect.type === "adjustResource").after, 5000);
-  assert.equal(resolved.dashboard.statuses.firstCouncilDue, false);
-  assert.equal(resolved.dashboard.participants.find((candidate: JsonObject) => candidate.id === director.participant.id).resources.money, 5000);
-  assert.equal(resolved.dashboard.messages.at(-1).target, "allParticipants");
+  assert.equal(vote.accepted, true);
+  assert.equal(vote.actionResult.effect.type, "castVote");
+  assert.equal(vote.actionResult.effect.tally[candidate.participant.id], 3);
+  assert.equal(vote.actionResult.effect.leader.participantId, candidate.participant.id);
+  assert.equal(vote.dashboard.statuses.ministerElectionTally[candidate.participant.id], 3);
+  assert.equal(vote.dashboard.participants.find((participant: JsonObject) => participant.id === voter.participant.id).resources.voteBallots, 5);
 });
 
 test("runs the stripped Putsch operational demo path", async () => {
@@ -1259,15 +1324,26 @@ test("runs the stripped Putsch operational demo path", async () => {
     actionId: "attempt-coup",
     participantId: general.participant.id,
     payload: {
-      defenderId: fun.participant.id,
+      defenderId: dealer.participant.id,
       leaderIds: [general.participant.id, dealer.participant.id],
       resources: { weapons: 1, ammo: 1 }
     }
   });
-  const coupResolutionId = coup.dashboard.pendingResolutions[0].id;
-  const resolvedCoup = await injectJson("POST", `/sessions/${code}/resolutions/${coupResolutionId}/resolve`, {
-    outcome: "attacker-wins"
+  assert.equal(coup.dashboard.pendingResolutions[0].payload.commitments.attacker.total, 2);
+  const defenderModel = await injectJson("GET", `/sessions/${code}/read-models/participant/${dealer.participant.id}`);
+  assert.equal(defenderModel.pendingResolutions[0].payload.commitmentDeadline.durationSeconds, 120);
+  assert.equal(defenderModel.availableActions.some((action: JsonObject) => action.id === "defend-coup"), true);
+
+  const resolvedCoup = await injectJson("POST", `/sessions/${code}/events`, {
+    type: "action.requested",
+    actionId: "defend-coup",
+    participantId: dealer.participant.id,
+    payload: {
+      resources: { ammo: 1 }
+    }
   });
+  assert.equal(resolvedCoup.actionResult.effect.type, "autoResolvedContest");
+  assert.equal(resolvedCoup.actionResult.effect.outcome, "attacker-wins");
   assert.equal(resolvedCoup.dashboard.statuses.copperPrice, 500);
   assert.equal(resolvedCoup.dashboard.statuses.firstCouncilDue, true);
 
@@ -1283,15 +1359,11 @@ test("runs the stripped Putsch operational demo path", async () => {
       decisions: "Le conseil clot la crise apres le coup."
     }
   });
-  const councilResolutionId = council.dashboard.pendingResolutions[0].id;
-  const resolvedCouncil = await injectJson("POST", `/sessions/${code}/resolutions/${councilResolutionId}/resolve`, {
-    outcome: "facilitator-resolved"
-  });
-
-  assert.equal(resolvedCouncil.dashboard.statuses.firstCouncilDue, false);
-  assert.equal(resolvedCouncil.dashboard.participants.find((candidate: JsonObject) => candidate.id === director.participant.id).resources.money, 5000);
-  assert.equal(resolvedCouncil.dashboard.messages.at(-1).target, "allParticipants");
-  assert.equal(resolvedCouncil.dashboard.pendingResolutions.length, 0);
+  assert.equal(council.actionResult.effect.type, "autoResolvedLiveAdministration");
+  assert.equal(council.dashboard.statuses.firstCouncilDue, false);
+  assert.equal(council.dashboard.participants.find((candidate: JsonObject) => candidate.id === director.participant.id).resources.money, 5000);
+  assert.equal(council.dashboard.messages.at(-1).target, "allParticipants");
+  assert.equal(council.dashboard.pendingResolutions.length, 0);
 });
 
 test("lets the facilitator resolve a pending resolution", async () => {
@@ -1311,7 +1383,7 @@ test("lets the facilitator resolve a pending resolution", async () => {
     type: "action.requested",
     actionId: "attempt-coup",
     sourceDeviceId: device.device.id,
-    payload: { defenderId: "pending-defender", leaderIds: ["leader-a", "leader-b"] }
+    payload: { defenderId: "pending-defender", leaderIds: ["leader-a", "leader-b"], resources: { weapons: 1, ammo: 1 } }
   });
   assert.equal(coup.dashboard.pendingResolutions.length, 1);
   const resolutionId = coup.dashboard.pendingResolutions[0].id;
@@ -1370,7 +1442,7 @@ test("requires injection authority before resolving Putsch table state", async (
     type: "action.requested",
     actionId: "attempt-coup",
     sourceDeviceId: device.device.id,
-    payload: { defenderId: "pending-defender", leaderIds: ["leader-a", "leader-b"] }
+    payload: { defenderId: "pending-defender", leaderIds: ["leader-a", "leader-b"], resources: { weapons: 1, ammo: 1 } }
   });
   const resolutionId = coup.dashboard.pendingResolutions[0].id;
 
@@ -1400,7 +1472,7 @@ test("rejects invalid resolution effects without closing the resolution", async 
     type: "action.requested",
     actionId: "attempt-coup",
     sourceDeviceId: device.device.id,
-    payload: { defenderId: "pending-defender", leaderIds: ["leader-a", "leader-b"] }
+    payload: { defenderId: "pending-defender", leaderIds: ["leader-a", "leader-b"], resources: { weapons: 1, ammo: 1 } }
   });
   const resolutionId = coup.dashboard.pendingResolutions[0].id;
 

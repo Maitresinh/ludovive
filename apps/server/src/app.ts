@@ -379,6 +379,11 @@ const setResourceSchema = z.object({
   value: z.number().int()
 });
 
+const setSessionStateSchema = z.object({
+  state: z.string().min(1),
+  value: z.unknown()
+});
+
 const phaseTimerSchema = z.object({
   durationSeconds: z.number().int().positive().optional(),
   endsAt: z.string().datetime().optional(),
@@ -523,6 +528,12 @@ const runTimedIncomeEffectSchema = z.object({
   excludeRoles: z.array(z.string()).default([])
 });
 
+const castVoteEffectSchema = z.object({
+  type: z.literal("castVote"),
+  resource: z.string().min(1),
+  state: z.string().min(1)
+});
+
 const unlockPhaseZoneEffectSchema = z.object({
   type: z.literal("unlockPhase"),
   phase: z.string().min(1)
@@ -544,7 +555,8 @@ const knownEffectSchema = z.discriminatedUnion("type", [
   setStateEffectSchema,
   messageEffectSchema,
   revealContactHintEffectSchema,
-  runTimedIncomeEffectSchema
+  runTimedIncomeEffectSchema,
+  castVoteEffectSchema
 ]);
 
 const knownZoneEffectSchema = z.discriminatedUnion("type", [
@@ -871,6 +883,45 @@ function liveAdministrationPayloadEffects(resolution: PendingResolution): Resolu
   return [{ type: "adjustResource", resource: "money", delta: Math.floor(money) }];
 }
 
+function resourceBundleTotal(resources: Record<string, unknown> | undefined): number {
+  return Object.values(resources ?? {}).reduce<number>((sum, value) => {
+    const amount = Number(value);
+    return Number.isFinite(amount) ? sum + amount : sum;
+  }, 0);
+}
+
+function contestCommitmentPayload(participantId: string, resources: Record<string, number>): Record<string, unknown> {
+  return {
+    participantId,
+    resources,
+    total: resourceBundleTotal(resources),
+    committedAt: new Date().toISOString()
+  };
+}
+
+function commitmentDeadline(session: Session): Record<string, unknown> {
+  const durationSeconds = Math.max(1, Math.floor(Number(session.statuses.coupCommitmentSeconds ?? currentPhase(session).durationSeconds ?? 120)));
+  return {
+    durationSeconds,
+    endsAt: new Date(Date.now() + durationSeconds * 1000).toISOString()
+  };
+}
+
+function contestedCoupOutcome(resolution: PendingResolution): string | undefined {
+  const payload = objectRecord(resolution.payload);
+  const commitments = objectRecord(payload?.commitments);
+  const attacker = objectRecord(commitments?.attacker);
+  const defender = objectRecord(commitments?.defender);
+  if (!attacker || !defender) {
+    return undefined;
+  }
+  const attackerTotal = Number(attacker.total ?? 0);
+  const defenderTotal = Number(defender.total ?? 0);
+  if (attackerTotal > defenderTotal) return "attacker-wins";
+  if (defenderTotal > attackerTotal) return "defender-wins";
+  return "tie-facilitator";
+}
+
 function resolutionEffects(resolution: PendingResolution, input: z.infer<typeof resolveResolutionSchema>): ResolutionEffect[] {
   const declaredEffects = declaredResolutionOutcomes(resolution).find((outcome) => outcome.id === input.outcome)?.effects ?? [];
   const defaultEffects = defaultResolutionEffects(resolution);
@@ -958,6 +1009,10 @@ function applyResolutionEffects(session: Session, resolution: PendingResolution,
     participant.statuses[effect.state] = after;
     return { type: effect.type, participantId: participant.id, state: effect.state, before, after };
   });
+}
+
+function autoResolveResolution(session: Session, resolution: PendingResolution, outcome: string, note?: string): Record<string, unknown> {
+  return resolvePendingResolution(session, resolution.id, { outcome, note, payload: {} });
 }
 
 function resolvePendingResolution(session: Session, resolutionId: string, input: z.infer<typeof resolveResolutionSchema>): Record<string, unknown> {
@@ -1110,6 +1165,39 @@ function runTimedIncome(session: Session, effect: z.infer<typeof runTimedIncomeE
   };
 }
 
+function runCastVote(session: Session, module: GameModule, participant: Participant, effect: z.infer<typeof castVoteEffectSchema>, event: EventInput): Record<string, unknown> {
+  const candidateId = typeof event.payload.candidateId === "string" ? event.payload.candidateId : undefined;
+  const votes = Number(event.payload.votes ?? 1);
+  if (!candidateId || !participantExists(session, candidateId)) {
+    throw new Error("Vote requires a known candidateId");
+  }
+  if (!Number.isInteger(votes) || votes <= 0) {
+    throw new Error("Vote count must be a positive integer");
+  }
+
+  assertResourceChange(module, participant, effect.resource, -votes);
+  const resourceChange = adjustResource(module, participant, effect.resource, -votes);
+  const tally = objectRecord(session.statuses[effect.state]) ?? {};
+  const before = Number(tally[candidateId] ?? 0);
+  tally[candidateId] = before + votes;
+  session.statuses[effect.state] = tally;
+  participant.statuses.lastVote = { candidateId, votes, at: new Date().toISOString() };
+  const leader = Object.entries(tally)
+    .map(([participantId, count]) => ({ participantId, votes: Number(count) }))
+    .sort((a, b) => b.votes - a.votes)[0];
+
+  return {
+    type: effect.type,
+    resource: effect.resource,
+    state: effect.state,
+    candidateId,
+    votes,
+    resourceChange,
+    tally,
+    leader
+  };
+}
+
 function applyEffect(session: Session, module: GameModule, participant: Participant, effect: KnownEffect, event: EventInput): Record<string, unknown> {
   if (effect.type === "adjustResource") {
     return {
@@ -1135,6 +1223,10 @@ function applyEffect(session: Session, module: GameModule, participant: Particip
 
   if (effect.type === "runTimedIncome") {
     return runTimedIncome(session, effect);
+  }
+
+  if (effect.type === "castVote") {
+    return runCastVote(session, module, participant, effect, event);
   }
 
   participant.statuses.contactHint = {
@@ -1196,6 +1288,145 @@ function actionExchangeResources(
       return [resourceId, amount];
     })
   );
+}
+
+function consumeActionResources(module: GameModule, participant: Participant, resources: Record<string, number>): Record<string, unknown>[] {
+  for (const [resourceId, amount] of Object.entries(resources)) {
+    assertResourceChange(module, participant, resourceId, -amount);
+  }
+  return Object.entries(resources).map(([resourceId, amount]) => adjustResource(module, participant, resourceId, -amount));
+}
+
+function pushPendingActionResolution(
+  session: Session,
+  participant: Participant,
+  action: GameModule["actions"][number],
+  mechanic: GameModule["mechanics"][number],
+  payload: Record<string, unknown>
+): PendingResolution {
+  const pendingResolution: PendingResolution = {
+    id: crypto.randomUUID(),
+    type: effectType(action.effect, mechanic.family),
+    participantId: participant.id,
+    actionId: action.id,
+    mechanicId: mechanic.id,
+    mechanicFamily: mechanic.family,
+    payload,
+    resolution: mechanic.resolution,
+    visibility: mechanic.visibility,
+    status: "pending",
+    createdAt: new Date().toISOString()
+  };
+  session.pendingResolutions.push(pendingResolution);
+  return pendingResolution;
+}
+
+function applyContestAction(
+  session: Session,
+  module: GameModule,
+  participant: Participant,
+  action: GameModule["actions"][number],
+  mechanic: GameModule["mechanics"][number] | undefined,
+  event: EventInput
+): Record<string, unknown> | undefined {
+  const effect = objectRecord(action.effect);
+  if (mechanic?.family !== "contest") {
+    return undefined;
+  }
+
+  if (effect?.type === "contestedBid") {
+    const resources = actionExchangeResources(module, action, mechanic, event.payload);
+    const resourceChanges = consumeActionResources(module, participant, resources);
+    const payload = {
+      ...event.payload,
+      commitmentDeadline: commitmentDeadline(session),
+      commitments: {
+        attacker: contestCommitmentPayload(participant.id, resources)
+      }
+    };
+    const pendingResolution = pushPendingActionResolution(session, participant, action, mechanic, payload);
+    return {
+      type: "pendingResolution",
+      resolutionId: pendingResolution.id,
+      mechanicId: mechanic.id,
+      mechanicFamily: mechanic.family,
+      actionEffectType: pendingResolution.type,
+      status: pendingResolution.status,
+      resourceChanges,
+      commitments: {
+        attacker: objectRecord(payload.commitments)?.attacker
+      }
+    };
+  }
+
+  if (effect?.type === "contestResponse") {
+    const pendingResolution = session.pendingResolutions.find((resolution) => {
+      const payload = objectRecord(resolution.payload);
+      return resolution.mechanicId === mechanic.id && payload?.defenderId === participant.id;
+    });
+    if (!pendingResolution) {
+      throw new Error("No pending contest requires this participant");
+    }
+
+    const resources = actionExchangeResources(module, action, mechanic, event.payload);
+    const resourceChanges = consumeActionResources(module, participant, resources);
+    const payload = objectRecord(pendingResolution.payload) ?? {};
+    const commitments = objectRecord(payload.commitments) ?? {};
+    pendingResolution.payload = {
+      ...payload,
+      commitments: {
+        ...commitments,
+        defender: contestCommitmentPayload(participant.id, resources)
+      }
+    };
+
+    const outcome = contestedCoupOutcome(pendingResolution);
+    if (!outcome) {
+      return {
+        type: "contestCommitmentRecorded",
+        resolutionId: pendingResolution.id,
+        mechanicId: mechanic.id,
+        resourceChanges
+      };
+    }
+
+    const resolveResult = autoResolveResolution(session, pendingResolution, outcome, "Resolution automatique des engagements caches.");
+    return {
+      type: "autoResolvedContest",
+      resolutionId: pendingResolution.id,
+      mechanicId: mechanic.id,
+      outcome,
+      resourceChanges,
+      resolveResult
+    };
+  }
+
+  return undefined;
+}
+
+function applyLiveAdministrationAction(
+  session: Session,
+  participant: Participant,
+  action: GameModule["actions"][number],
+  mechanic: GameModule["mechanics"][number] | undefined,
+  event: EventInput
+): Record<string, unknown> | undefined {
+  const effect = objectRecord(action.effect);
+  if (mechanic?.family !== "live-administration" || effect?.type !== "recordLiveResults") {
+    return undefined;
+  }
+  if (!hasInjectionAuthority(session)) {
+    throw new Error("Injection authority is required for live administration");
+  }
+
+  const pendingResolution = pushPendingActionResolution(session, participant, action, mechanic, event.payload);
+  const resolveResult = autoResolveResolution(session, pendingResolution, "facilitator-resolved", "Compte rendu applique automatiquement.");
+  return {
+    type: "autoResolvedLiveAdministration",
+    resolutionId: pendingResolution.id,
+    mechanicId: mechanic.id,
+    resolveResult
+  };
 }
 
 function applyExchangeAction(
@@ -1268,20 +1499,7 @@ function createPendingActionResolution(
     return undefined;
   }
 
-  const pendingResolution: PendingResolution = {
-    id: crypto.randomUUID(),
-    type: effectType(action.effect, mechanic.family),
-    participantId: participant.id,
-    actionId: action.id,
-    mechanicId: mechanic.id,
-    mechanicFamily: mechanic.family,
-    payload: event.payload,
-    resolution: mechanic.resolution,
-    visibility: mechanic.visibility,
-    status: "pending",
-    createdAt: new Date().toISOString()
-  };
-  session.pendingResolutions.push(pendingResolution);
+  const pendingResolution = pushPendingActionResolution(session, participant, action, mechanic, event.payload);
 
   return {
     type: "pendingResolution",
@@ -1426,7 +1644,9 @@ function applyActionEvent(session: Session, event: EventInput): Record<string, u
   }
   const appliedEffect = parsedEffect.success
     ? applyEffect(session, module, participant, parsedEffect.data, event)
-    : applyExchangeAction(session, module, participant, action, mechanic, event) ??
+    : applyContestAction(session, module, participant, action, mechanic, event) ??
+      applyLiveAdministrationAction(session, participant, action, mechanic, event) ??
+      applyExchangeAction(session, module, participant, action, mechanic, event) ??
       createPendingActionResolution(session, module, participant, action, event) ??
       { type: "unsupported", effect: action.effect };
 
@@ -1442,6 +1662,7 @@ function applyActionEvent(session: Session, event: EventInput): Record<string, u
 function actionBlockedBy(session: Session, participant: Participant, action: GameModule["actions"][number]): string[] {
   const module = getModuleOrThrow(session.moduleId);
   const blockedBy: string[] = [];
+  const effect = objectRecord(action.effect);
 
   if (!actorMatches(action.actor, participant)) {
     blockedBy.push("role");
@@ -1454,6 +1675,15 @@ function actionBlockedBy(session: Session, participant: Participant, action: Gam
       assertResourceChange(module, participant, resourceId, -cost);
     } catch {
       blockedBy.push(`resource:${resourceId}`);
+    }
+  }
+  if (effect?.type === "contestResponse") {
+    const hasPendingContest = session.pendingResolutions.some((resolution) => {
+      const payload = objectRecord(resolution.payload);
+      return resolution.mechanicId === action.mechanicId && payload?.defenderId === participant.id;
+    });
+    if (!hasPendingContest) {
+      blockedBy.push("pendingContest");
     }
   }
 
@@ -1805,6 +2035,13 @@ function participantReadModel(session: Session, participantId: string): Record<s
 
   const module = getModuleOrThrow(session.moduleId);
   const ownRole = participant.roleId ? module.roles.find((role) => role.id === participant.roleId) : undefined;
+  const visiblePendingResolutions = session.pendingResolutions.filter((resolution) => {
+    if (resolution.participantId === participant.id) return true;
+    const payload = objectRecord(resolution.payload);
+    if (resolution.mechanicId === "contested-coup") return true;
+    if (payload?.defenderId === participant.id) return true;
+    return Array.isArray(payload?.leaderIds) && payload.leaderIds.includes(participant.id);
+  });
   return {
     code: session.code,
     module: {
@@ -1827,7 +2064,7 @@ function participantReadModel(session: Session, participantId: string): Record<s
     participant,
     ownRole,
     availableActions: actionAvailability(session, participant).filter((action) => action.available),
-    pendingResolutions: session.pendingResolutions.filter((resolution) => resolution.participantId === participant.id),
+    pendingResolutions: visiblePendingResolutions,
     exchanges: session.exchanges.filter((exchange) => exchange.fromParticipantId === participant.id || exchange.toParticipantId === participant.id),
     messages: visibleMessagesForParticipant(session, participant.id),
     visibleParticipants: session.participants.map((candidate) => ({
@@ -2077,6 +2314,9 @@ function renderIndex(): string {
           <label for="phaseDuration">Duree phase (secondes)</label>
           <input id="phaseDuration" type="number" min="1" value="300" />
           <button id="setTimer" class="secondary">Regler minuteur</button>
+          <label for="coupCommitmentDuration">Duree engagements putsch (secondes)</label>
+          <input id="coupCommitmentDuration" type="number" min="1" value="120" />
+          <button id="setCoupCommitmentDuration" class="secondary">Regler engagements</button>
           <button id="advance" class="secondary">Phase suivante</button>
         </section>
       </div>
@@ -2401,6 +2641,7 @@ function renderIndex(): string {
         '<span class="pill">' + session.participants.length + ' participant(s)</span>',
         Object.keys(session.statuses || {}).length ? renderStatusList(session.statuses) : ""
       ].join(" ");
+      if (byId("coupCommitmentDuration")) byId("coupCommitmentDuration").value = session.statuses.coupCommitmentSeconds || 120;
       byId("mvpPanel").innerHTML = renderMvpPanel(session);
       byId("participants").innerHTML = session.participants.map((participant) => {
         const resources = Object.entries(participant.resources).map(([key, value]) => dashboardResourceLabel(session, key) + ": " + value).join(" / ");
@@ -2589,6 +2830,11 @@ function renderIndex(): string {
       await api("/sessions/" + code + "/phases/timer", { method: "POST", body: JSON.stringify({ durationSeconds: Number(byId("phaseDuration").value) }) });
       await refresh();
     }));
+    byId("setCoupCommitmentDuration").addEventListener("click", () => run(async () => {
+      const code = byId("code").value || sessionCode;
+      await api("/sessions/" + code + "/state", { method: "POST", body: JSON.stringify({ state: "coupCommitmentSeconds", value: Number(byId("coupCommitmentDuration").value) }) });
+      await refresh();
+    }));
     byId("advance").addEventListener("click", () => run(async () => {
       const code = byId("code").value || sessionCode;
       await api("/sessions/" + code + "/phases/advance", { method: "POST", body: JSON.stringify({}) });
@@ -2673,6 +2919,8 @@ function renderParticipantApp(): string {
       <div id="exchanges" class="stack"></div>
       <h3>Messages</h3>
       <div id="messages" class="stack"></div>
+      <h3>A traiter</h3>
+      <div id="pendingResolutions" class="stack"></div>
       <h3>Actions de cette phase</h3>
       <div id="actions" class="stack"></div>
       <button id="leave" class="secondary">Oublier cet appareil</button>
@@ -2768,6 +3016,18 @@ function renderParticipantApp(): string {
       if (!clock) return "sans minuteur";
       const end = clock.phaseEndsAt ? new Date(clock.phaseEndsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "fin libre";
       return "Tour " + clock.turn + " - " + (clock.phaseDurationSeconds || "sans duree") + "s - fin " + end;
+    }
+    function formatDeadline(deadline) {
+      if (!deadline?.endsAt) return "temps libre";
+      const remaining = Math.max(0, Math.ceil((new Date(deadline.endsAt).getTime() - Date.now()) / 1000));
+      return remaining + "s restantes";
+    }
+    function renderPendingResolution(model, resolution) {
+      const payload = resolution.payload || {};
+      const title = resolution.mechanicId === "contested-coup" ? "Coup d'Etat en cours" : resolution.type;
+      const defender = payload.defenderId ? model.visibleParticipants.find((participant) => participant.id === payload.defenderId)?.name || payload.defenderId : "";
+      const deadline = payload.commitmentDeadline ? '<div class="pill">' + formatDeadline(payload.commitmentDeadline) + '</div>' : "";
+      return '<div class="item"><strong>' + title + '</strong>' + (defender ? '<div>Defenseur: ' + defender + '</div>' : '') + deadline + '<div class="muted">Les engagements sont caches jusqu a resolution.</div></div>';
     }
     function actionInputLabel(input) {
       const labels = {
@@ -2874,6 +3134,7 @@ function renderParticipantApp(): string {
         return '<div class="item"><strong>' + direction + '</strong><div>' + resources + '</div></div>';
       }).join("") || '<div class="muted">Aucun echange</div>';
       byId("messages").innerHTML = (model.messages || []).slice(-5).map((message) => '<div class="item"><strong>' + message.channel + '</strong><div>' + message.text + '</div></div>').join("") || '<div class="muted">Aucun message</div>';
+      byId("pendingResolutions").innerHTML = (model.pendingResolutions || []).map((resolution) => renderPendingResolution(model, resolution)).join("") || '<div class="muted">Rien a traiter</div>';
       byId("actions").innerHTML = (model.availableActions || []).filter((action) => action.available).map((action) => '<div class="item actionCard action-' + (action.mechanicFamily || "generic") + '"><strong>' + action.name + '</strong><div class="muted">' + actionHint(action) + '</div>' + actionForm(model, action) + '<button class="secondary actionButton" data-action-id="' + action.id + '">' + actionVerb(action) + '</button></div>').join("") || '<div class="muted">Aucune action disponible dans cette phase</div>';
     }
     byId("loadSession").addEventListener("click", () => run(loadSession));
@@ -3557,4 +3818,27 @@ app.post("/sessions/:code/players/:playerId/resources", async (request, reply) =
   audit(session, "resource.changed", { participantId: participant.id, resourceId: input.resourceId, value: input.value });
   broadcast(session, "resource.changed", { participantId: participant.id, resourceId: input.resourceId, value: input.value });
   return visibleSession(session);
+});
+
+app.post("/sessions/:code/state", async (request, reply) => {
+  const { code } = request.params as { code: string };
+  const session = getSession(code);
+  if (!session) {
+    return reply.code(404).send({ error: "Session not found" });
+  }
+  if (!hasInjectionAuthority(session)) {
+    return reply.code(403).send({ error: "Injection authority is required for session state changes" });
+  }
+
+  const input = setSessionStateSchema.parse(request.body);
+  const before = session.statuses[input.state];
+  session.statuses[input.state] = input.value;
+  const state = { state: input.state, before, after: input.value };
+  audit(session, "session.state_set", state);
+  broadcast(session, "session.state_set", session.audit.at(-1));
+  return {
+    accepted: true,
+    state,
+    dashboard: dashboardReadModel(session)
+  };
 });
