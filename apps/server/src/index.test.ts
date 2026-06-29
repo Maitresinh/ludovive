@@ -1192,6 +1192,11 @@ test("opens pending petition resolutions from module mechanics", async () => {
   assert.equal(body.dashboard.pendingResolutions[0].actionId, "submit-petition");
   assert.equal(body.dashboard.pendingResolutions[0].payload.petitionText, "Demander une levee exceptionnelle");
   assert.equal(body.dashboard.pendingResolutions[0].summary, "Reine: Demander une levee exceptionnelle");
+  assert.equal(body.dashboard.pendingResolutions[0].scene.kind, "petition");
+  assert.equal(body.dashboard.pendingResolutions[0].scene.title, "Deposer une petition");
+  assert.equal(body.dashboard.pendingResolutions[0].scene.participants[0].role, "actor");
+  assert.equal(body.dashboard.pendingResolutions[0].scene.participants[0].name, "Reine");
+  assert.equal(body.dashboard.pendingResolutions[0].scene.inputHints.some((input: JsonObject) => input.id === "petitionText"), true);
   assert.deepEqual(
     body.dashboard.pendingResolutions[0].recommendedOutcomes.map((outcome: JsonObject) => outcome.id),
     ["accepted", "rejected", "deferred"]
@@ -1199,6 +1204,7 @@ test("opens pending petition resolutions from module mechanics", async () => {
 
   const deviceModel = await injectJson("GET", `/sessions/${code}/read-models/device/${device.device.id}`);
   assert.equal(deviceModel.pendingResolutions[0].mechanicId, "petition-vote");
+  assert.equal(deviceModel.pendingResolutions[0].scene.kind, "petition");
 });
 
 test("opens pending contest resolutions from module mechanics", async () => {
@@ -1234,6 +1240,13 @@ test("opens pending contest resolutions from module mechanics", async () => {
   assert.equal(body.dashboard.pendingResolutions[0].payload.commitments.attacker.total, 2);
   assert.equal(body.dashboard.pendingResolutions[0].payload.commitmentDeadline.durationSeconds, 120);
   assert.equal(typeof body.dashboard.pendingResolutions[0].payload.commitmentDeadline.endsAt, "string");
+  assert.equal(body.dashboard.pendingResolutions[0].scene.kind, "contest");
+  assert.equal(body.dashboard.pendingResolutions[0].scene.title, "Tenter un coup d'Etat");
+  assert.equal(body.dashboard.pendingResolutions[0].scene.deadline.durationSeconds, 120);
+  assert.deepEqual(
+    body.dashboard.pendingResolutions[0].scene.inputHints.find((input: JsonObject) => input.id === "resources").allowed,
+    ["weapons", "ammo", "influence"]
+  );
   assert.deepEqual(
     body.dashboard.pendingResolutions[0].recommendedOutcomes.map((outcome: JsonObject) => outcome.id),
     ["attacker-wins", "defender-wins", "tie-facilitator"]

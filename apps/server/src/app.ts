@@ -296,6 +296,26 @@ type ActionAvailability = {
   blockedBy: string[];
 };
 
+type SceneParticipant = {
+  id: string;
+  name: string;
+  role: "actor" | "defender" | "leader" | "attendee" | "candidate" | "involved";
+};
+
+type ResolutionScene = {
+  id: string;
+  kind: string;
+  title: string;
+  prompt: string;
+  status: "pending";
+  actionId?: string;
+  mechanicId?: string;
+  mechanicFamily?: string;
+  deadline?: unknown;
+  participants: SceneParticipant[];
+  inputHints: unknown[];
+};
+
 const modules = new Map<string, GameModule>();
 const sessions = new Map<string, Session>();
 const liveClients = new Map<string, Set<{ audience: Audience; send: (payload: string) => void }>>();
@@ -2011,6 +2031,91 @@ function participantNames(session: Session, participantIds: unknown): string[] {
     : [];
 }
 
+function sceneParticipant(session: Session, participantId: unknown, role: SceneParticipant["role"]): SceneParticipant | undefined {
+  if (typeof participantId !== "string") {
+    return undefined;
+  }
+  const participant = session.participants.find((candidate) => candidate.id === participantId);
+  if (!participant) {
+    return undefined;
+  }
+  return {
+    id: participant.id,
+    name: participant.name,
+    role
+  };
+}
+
+function pushSceneParticipant(
+  participants: SceneParticipant[],
+  participant: SceneParticipant | undefined
+): void {
+  if (!participant) {
+    return;
+  }
+  if (participants.some((candidate) => candidate.id === participant.id && candidate.role === participant.role)) {
+    return;
+  }
+  participants.push(participant);
+}
+
+function resolutionInputHints(session: Session, resolution: PendingResolution): unknown[] {
+  const module = getModuleOrThrow(session.moduleId);
+  const mechanic = module.mechanics.find((candidate) => candidate.id === resolution.mechanicId);
+  const action = module.actions.find((candidate) => candidate.id === resolution.actionId);
+  return (mechanic?.inputs ?? []).filter((input) => {
+    const inputRecord = objectRecord(input);
+    return inputRecord?.source !== "actor-or-bound-device";
+  }).map((input) => {
+    const inputRecord = objectRecord(input);
+    if (inputRecord?.type !== "resource-bundle") {
+      return input;
+    }
+    return {
+      ...inputRecord,
+      allowed: action ? actionAllowedResources(module, action, mechanic) : inputRecord.allowed
+    };
+  });
+}
+
+function resolutionScene(session: Session, resolution: PendingResolution): ResolutionScene {
+  const module = getModuleOrThrow(session.moduleId);
+  const mechanic = module.mechanics.find((candidate) => candidate.id === resolution.mechanicId);
+  const action = module.actions.find((candidate) => candidate.id === resolution.actionId);
+  const payload = objectRecord(resolution.payload) ?? {};
+  const participants: SceneParticipant[] = [];
+
+  pushSceneParticipant(participants, sceneParticipant(session, resolution.participantId, "actor"));
+  pushSceneParticipant(participants, sceneParticipant(session, payload.defenderId, "defender"));
+  for (const leaderId of Array.isArray(payload.leaderIds) ? payload.leaderIds : []) {
+    pushSceneParticipant(participants, sceneParticipant(session, leaderId, "leader"));
+  }
+  for (const attendeeId of Array.isArray(payload.attendeeIds) ? payload.attendeeIds : []) {
+    pushSceneParticipant(participants, sceneParticipant(session, attendeeId, "attendee"));
+  }
+  pushSceneParticipant(participants, sceneParticipant(session, payload.promotionCandidateId, "candidate"));
+  pushSceneParticipant(participants, sceneParticipant(session, payload.eliminationCandidateId, "candidate"));
+
+  const title = action?.name ?? mechanic?.name ?? resolution.type;
+  const prompt =
+    mechanic?.summary ??
+    (resolution.zoneId ? `Resoudre l'effet de zone ${resolution.zoneId}.` : "Scene a traiter par la table.");
+
+  return {
+    id: resolution.id,
+    kind: mechanic?.family ?? resolution.type,
+    title,
+    prompt,
+    status: resolution.status,
+    actionId: resolution.actionId,
+    mechanicId: resolution.mechanicId,
+    mechanicFamily: resolution.mechanicFamily,
+    deadline: objectRecord(payload.commitmentDeadline),
+    participants,
+    inputHints: resolutionInputHints(session, resolution)
+  };
+}
+
 function resolutionOutcomes(resolution: PendingResolution): ResolutionOutcome[] {
   const declared = declaredResolutionOutcomes(resolution);
   if (declared.length > 0) {
@@ -2070,6 +2175,7 @@ function resolutionSummary(session: Session, resolution: PendingResolution): str
 function enrichResolution(session: Session, resolution: PendingResolution): PendingResolution & {
   participantName?: string;
   summary: string;
+  scene: ResolutionScene;
   recommendedOutcomes: ResolutionOutcome[];
   automaticEffects: ResolutionEffect[];
 } {
@@ -2077,6 +2183,7 @@ function enrichResolution(session: Session, resolution: PendingResolution): Pend
     ...resolution,
     participantName: participantName(session, resolution.participantId),
     summary: resolutionSummary(session, resolution),
+    scene: resolutionScene(session, resolution),
     recommendedOutcomes: resolutionOutcomes(resolution),
     automaticEffects: [...defaultResolutionEffects(resolution), ...liveAdministrationPayloadEffects(resolution)]
   };
@@ -2130,7 +2237,7 @@ function participantReadModel(session: Session, participantId: string): Record<s
     participant,
     ownRole,
     availableActions: actionAvailability(session, participant).filter((action) => action.available),
-    pendingResolutions: visiblePendingResolutions,
+    pendingResolutions: visiblePendingResolutions.map((resolution) => enrichResolution(session, resolution)),
     exchanges: session.exchanges.filter((exchange) => exchange.fromParticipantId === participant.id || exchange.toParticipantId === participant.id),
     messages: visibleMessagesForParticipant(session, participant.id),
     visibleParticipants: session.participants.map((candidate) => ({
