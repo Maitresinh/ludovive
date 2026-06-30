@@ -3023,19 +3023,19 @@ function renderIndex(): string {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Ludovive Demo</title>
   <style>
-    :root { color-scheme: dark; --bg: #101214; --panel: #181b1f; --line: #343a42; --ink: #f2f4f5; --muted: #aab2bb; --accent: #b94b42; --blue: #315875; --green: #3f6b4d; --warning: #b88a3b; }
+    :root { color-scheme: dark; --bg: #101214; --panel: #181b1f; --surface: #111417; --field: #0d0f11; --line: #343a42; --ink: #f2f4f5; --muted: #aab2bb; --accent: #b94b42; --blue: #315875; --green: #3f6b4d; --warning: #b88a3b; --radius: 8px; }
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: Arial, sans-serif; background: var(--bg); color: var(--ink); }
+    body { margin: 0; font-family: Arial, sans-serif; background: radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 10%, transparent), transparent 28rem), var(--bg); color: var(--ink); }
     main { width: min(1440px, 100%); margin: 0 auto; padding: 20px; }
     h1 { margin: 0; font-size: 28px; font-weight: 700; }
     h2 { margin: 0 0 12px; font-size: 17px; }
     h3 { margin: 12px 0 8px; font-size: 14px; color: var(--muted); }
-    section { border: 1px solid var(--line); border-radius: 8px; padding: 14px; background: var(--panel); min-width: 0; }
+    section { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; background: color-mix(in srgb, var(--panel) 94%, black); min-width: 0; box-shadow: 0 1px 0 rgba(255,255,255,.04) inset; }
     label { display: block; margin: 8px 0 4px; color: var(--muted); font-size: 13px; }
     input, select, button, textarea { font: inherit; border-radius: 6px; border: 1px solid #4b535d; padding: 9px; }
-    input, select, textarea { width: 100%; background: #0d0f11; color: var(--ink); }
+    input, select, textarea { width: 100%; background: var(--field); color: var(--ink); }
     textarea { min-height: 72px; resize: vertical; }
-    button { background: var(--accent); color: white; cursor: pointer; margin-top: 10px; min-height: 40px; }
+    button { background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 88%, white), var(--accent)); color: white; cursor: pointer; margin-top: 10px; min-height: 40px; font-weight: 700; box-shadow: 0 1px 0 rgba(255,255,255,.14) inset; }
     button.secondary { background: var(--blue); }
     button.neutral { background: #30363d; }
     button.success { background: var(--green); }
@@ -3046,17 +3046,19 @@ function renderIndex(): string {
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
     .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .brandLine { display: flex; align-items: center; gap: 10px; }
+    .brandMark { display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 72%, black); color: white; font-weight: 800; letter-spacing: .04em; }
     .pill { display: inline-block; padding: 4px 8px; border: 1px solid #59616b; border-radius: 999px; margin: 2px; font-size: 12px; color: #dce1e6; }
     .muted { color: var(--muted); }
     .list { display: grid; gap: 8px; }
     .list label input[type="checkbox"] { width: auto; margin-right: 6px; }
-    .item { border: 1px solid #2f353c; border-radius: 8px; padding: 10px; background: #111417; }
+    .item { border: 1px solid #2f353c; border-radius: var(--radius); padding: 10px; background: var(--surface); }
     .item strong { display: block; margin-bottom: 4px; }
     .ergoNowBoard { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
     .statTile { border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--line)); border-radius: 8px; padding: 10px; background: color-mix(in srgb, var(--panel) 82%, #0d0f11); }
     .statTile strong { font-size: 22px; line-height: 1; }
     .resourceWallet { display: grid; grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); gap: 8px; margin-top: 8px; }
-    .resourceChip { display: grid; grid-template-columns: 30px 1fr; align-items: center; gap: 8px; border: 1px solid #3c454f; border-radius: 8px; padding: 8px; min-width: 0; background: #0d0f11; }
+    .resourceChip { display: grid; grid-template-columns: 30px 1fr; align-items: center; gap: 8px; border: 1px solid #3c454f; border-radius: var(--radius); padding: 8px; min-width: 0; background: var(--field); }
     .resourceChip .resourceValue { font-size: 20px; font-weight: 700; line-height: 1; }
     .resourceChip .resourceName { color: var(--muted); font-size: 12px; line-height: 1.2; overflow-wrap: anywhere; }
     .actionHeader { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
@@ -3069,6 +3071,24 @@ function renderIndex(): string {
     .phaseTrack { display: grid; grid-template-columns: repeat(var(--phase-total, 1), minmax(0, 1fr)); gap: 4px; }
     .phaseStep { height: 7px; border-radius: 999px; background: #30363d; }
     .phaseStep.active { background: var(--accent); }
+    .timerGauge { height: 8px; border-radius: 999px; background: #30363d; overflow: hidden; }
+    .timerGauge span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), var(--warning)); }
+    .gestureCard { display: grid; grid-template-columns: 92px 1fr; gap: 10px; align-items: center; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); border-radius: var(--radius); margin-top: 8px; padding: 8px; background: color-mix(in srgb, var(--accent) 11%, var(--surface)); }
+    .gestureTitle { font-weight: 700; }
+    .gestureTag { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .gestureArt { position: relative; height: 58px; border-radius: 8px; background: color-mix(in srgb, var(--field) 72%, var(--accent)); overflow: hidden; }
+    .phone { position: absolute; width: 24px; height: 42px; border: 2px solid var(--ink); border-radius: 6px; background: #0b0d0f; box-shadow: 0 0 0 1px rgba(0,0,0,.4); }
+    .phone:after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 3px; height: 2px; border-radius: 999px; background: var(--muted); }
+    .phoneA { left: 17px; top: 8px; transform: rotate(-8deg); }
+    .phoneB { right: 17px; top: 8px; transform: rotate(8deg); }
+    .motion { position: absolute; width: 9px; height: 9px; border-radius: 999px; border: 2px solid var(--warning); opacity: .9; }
+    .m1 { left: 43px; top: 16px; } .m2 { left: 54px; top: 27px; } .m3 { left: 64px; top: 38px; }
+    .gesture-pour-liquid .phoneA { transform: rotate(-36deg); top: 2px; }
+    .gesture-touch-phones .phoneA { left: 28px; transform: rotate(0deg); } .gesture-touch-phones .phoneB { right: 28px; transform: rotate(0deg); }
+    .gesture-strike-phone .phoneA { transform: rotate(-42deg); left: 20px; top: 4px; } .gesture-strike-phone .phoneB { transform: rotate(48deg); right: 20px; top: 11px; }
+    .gesture-parry-phone .phoneA { transform: rotate(52deg); left: 22px; } .gesture-parry-phone .phoneB { transform: rotate(-52deg); right: 22px; }
+    .gesture-ballot-drop .phoneA { transform: rotate(90deg); top: 14px; left: 34px; } .gesture-ballot-drop .phoneB { opacity: .25; }
+    .gesture-palm-cover .phoneA { left: 34px; } .gesture-palm-cover .phoneB { width: 40px; height: 22px; right: 18px; top: 18px; border-radius: 999px; opacity: .55; }
     .gestureCue { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); border-radius: 999px; margin-top: 8px; color: var(--ink); background: color-mix(in srgb, var(--accent) 15%, transparent); font-size: 12px; }
     .fallbackCue { color: var(--muted); font-size: 12px; margin-top: 4px; }
     .action-contest { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
@@ -3076,7 +3096,7 @@ function renderIndex(): string {
     .resourcePushGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 8px; margin-top: 8px; }
     .resourcePushTile { border: 1px solid #3c454f; border-radius: 8px; padding: 8px; background: #111417; }
     .resourcePushTile strong { display: flex; align-items: center; gap: 6px; min-height: 34px; font-size: 13px; }
-    .resourceIcon { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 22%, #0d0f11); }
+    .resourceIcon, .actionIcon { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 22%, #0d0f11); color: var(--ink); font-weight: 800; font-size: 11px; }
     .resourcePushControls { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
     .resourcePushControls button { min-height: 34px; margin: 0; padding: 6px; }
     .contactTarget { display: block; border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--line)); border-radius: 8px; padding: 9px; margin: 8px 0; background: color-mix(in srgb, var(--accent) 10%, transparent); }
@@ -3092,8 +3112,7 @@ function renderIndex(): string {
   <main>
     <div class="topbar">
       <div>
-        <h1>Ludovive</h1>
-        <div class="muted">Putsch au Panador core</div>
+        <div class="brandLine"><span class="brandMark">LV</span><div><h1>Ludovive</h1><div class="muted">Interface de jeu live</div></div></div>
       </div>
       <div>
         <a href="/play" id="participantLink" class="pill">App participant</a>
@@ -3281,7 +3300,17 @@ function renderIndex(): string {
         cf100: "100F",
         cm25: "25M",
         cm50: "50M",
-        cm100: "100M"
+        cm100: "100M",
+        gold: "Au",
+        income: "Inc",
+        favor: "Fav",
+        status: "Sta",
+        hull: "Hull",
+        oxygen: "O2",
+        battery: "Bat",
+        noise: "N",
+        torpedoes: "Tor",
+        intel: "Int"
       };
       return icons[resourceId] || resourceId.slice(0, 2).toUpperCase();
     }
@@ -3295,28 +3324,61 @@ function renderIndex(): string {
       Object.entries(map).forEach(([key, cssVar]) => { if (colors[key]) root.style.setProperty(cssVar, colors[key]); });
     }
     function themeIcon(session, key) {
-      return (session.module.uiTheme?.icons || {})[key] || "";
+      const icon = (session.module.uiTheme?.icons || {})[key] || "";
+      return /^[\x20-\x7E]{1,4}$/.test(icon) ? icon : "";
+    }
+    function actionIcon(session, action) {
+      const key = action.mechanicFamily || action.id;
+      const fallback = {
+        exchange: "TR",
+        contest: "ATK",
+        vote: "VOT",
+        petition: "PET",
+        market: "MKT",
+        "timed-income": "INC",
+        "live-administration": "ADM",
+        coordination: "CMD",
+        "resource-action": "SYS"
+      };
+      const themed = themeIcon(session, key);
+      return /^[\x20-\x7E]{1,4}$/.test(themed) ? themed : fallback[key] || fallback[action.gesture] || "ACT";
+    }
+    function gestureMeta(gesture) {
+      const gestures = {
+        "touch-phones": { label: "Contact telephones", detail: "Les deux telephones se touchent avant validation.", proximity: "contact requis" },
+        "pour-liquid": { label: "Verser", detail: "Incliner le telephone vers l'autre joueur pour pousser les ressources.", proximity: "telephones proches" },
+        "shake-phones": { label: "Serrer", detail: "Mouvement bref de poignee de main avec les telephones.", proximity: "meme table" },
+        "tap-stack": { label: "Poser sur la pile", detail: "Toucher la zone ou la pile physique qui represente le marche.", proximity: "zone de table" },
+        "palm-cover": { label: "Couvrir", detail: "Couvrir l'ecran pour une transaction discrete.", proximity: "a vue courte" },
+        "ballot-drop": { label: "Deposer", detail: "Poser le telephone comme un bulletin dans l'urne.", proximity: "zone de vote" },
+        "strike-phone": { label: "Frapper", detail: "Mouvement d'attaque court avec le telephone.", proximity: "duel proche" },
+        "parry-phone": { label: "Parer", detail: "Presenter le telephone en parade pendant le compte a rebours.", proximity: "duel proche" },
+        "hold-phone-up": { label: "Lever", detail: "Lever le telephone pour signaler un ordre.", proximity: "visible equipe" },
+        "tilt-phone-forward": { label: "Incliner", detail: "Incliner vers l'avant pour engager une action de poste.", proximity: "poste de table" },
+        "phone-face-down": { label: "Retourner", detail: "Retourner le telephone face contre table.", proximity: "poste de table" },
+        "slow-phone-arc": { label: "Balayage", detail: "Tracer un arc lent pour une recherche ou un sonar.", proximity: "poste de table" },
+        "slide-resource-to-edge": { label: "Pousser au bord", detail: "Faire glisser les jetons vers le bord de l'ecran.", proximity: "contact de table" }
+      };
+      return gestures[gesture] || { label: gesture, detail: "Geste declare par le module importe.", proximity: "selon module" };
+    }
+    function gestureArt(gesture) {
+      const className = String(gesture || "generic").replace(/[^a-z0-9-]/g, "");
+      return '<div class="gestureArt gesture-' + className + '"><span class="phone phoneA"></span><span class="phone phoneB"></span><span class="motion m1"></span><span class="motion m2"></span><span class="motion m3"></span></div>';
+    }
+    function renderGestureCard(session, action) {
+      if (!action.gesture) return "";
+      const meta = gestureMeta(action.gesture);
+      const primary = session.module.uiTheme?.interactionLabels?.primary || "Geste";
+      return '<div class="gestureCard">' + gestureArt(action.gesture) + '<div><div class="gestureTitle"><span class="actionIcon">' + actionIcon(session, action) + '</span> ' + primary + ': ' + (action.gestureLabel || meta.label) + '</div><div class="gestureTag">' + meta.proximity + '</div><div class="muted">' + meta.detail + '</div></div></div>';
     }
     function interactionCue(session, action) {
-      const gestureLabels = {
-        "touch-phones": "toucher les telephones",
-        "pour-liquid": "verser vers le telephone de l'autre joueur",
-        "shake-phones": "serrer la main avec les telephones",
-        "tap-stack": "poser le telephone sur la pile ou le titre",
-        "palm-cover": "couvrir l'ecran pour une transaction discrete",
-        "ballot-drop": "deposer le telephone comme un bulletin",
-        "strike-phone": "donner un coup d'epee avec le telephone",
-        "parry-phone": "parer avec le telephone"
-      };
-      const primary = session.module.uiTheme?.interactionLabels?.primary || "Geste";
       const fallback = session.module.uiTheme?.interactionLabels?.fallback || "Bouton de secours";
-      const gesture = action.gesture ? '<div class="gestureCue">' + themeIcon(session, action.mechanicFamily || action.id) + ' ' + primary + ': ' + (action.gestureLabel || gestureLabels[action.gesture] || action.gesture) + '</div>' : "";
-      return gesture + '<div class="fallbackCue">' + fallback + ': ' + (action.fallback || "confirmation manuelle") + '</div>';
+      return renderGestureCard(session, action) + '<div class="fallbackCue">' + fallback + ': ' + (action.fallback || "confirmation manuelle") + '</div>';
     }
     function renderThemePanel(session) {
       const theme = session.module.uiTheme || {};
       const cues = (session.module.soundboard || []).map((cue) => '<div class="muted">' + cue.name + ' - ' + cue.channel + (cue.phase ? ' / phase ' + cue.phase : '') + (cue.event ? ' / ' + cue.event : '') + '</div>').join("");
-      return '<div class="item themeBanner"><strong>' + (theme.icons?.game || "") + ' Template ' + (theme.template || "tabletop") + '</strong><div>' + (theme.tone || "Style de table") + '</div><div class="muted">Couleurs, icones et libelles viennent du module importe.</div>' + cues + '</div>';
+      return '<div class="item themeBanner"><strong><span class="actionIcon">' + (themeIcon(session, "game") || "LV") + '</span> Template ' + (theme.template || "tabletop") + '</strong><div>' + (theme.tone || "Style de table") + '</div><div class="muted">Couleurs, icones et libelles viennent du module importe.</div>' + cues + '</div>';
     }
     function formatTurnPhase(turnPhase, fallbackClock) {
       if (!turnPhase) return formatClock(fallbackClock);
@@ -3324,13 +3386,18 @@ function renderIndex(): string {
       const duration = turnPhase.durationSeconds ? turnPhase.durationSeconds + "s" : "sans duree";
       return "Tour " + turnPhase.turn + " - Phase " + (turnPhase.phase.index + 1) + "/" + turnPhase.phase.total + " - " + duration + " - fin " + end;
     }
+    function timerPercent(turnPhase) {
+      if (!turnPhase?.endsAt || !turnPhase.durationSeconds) return 100;
+      const remaining = Math.max(0, new Date(turnPhase.endsAt).getTime() - Date.now());
+      return Math.max(0, Math.min(100, Math.round((remaining / (turnPhase.durationSeconds * 1000)) * 100)));
+    }
     function renderTurnPhase(session) {
       const turnPhase = session.turnPhase;
       if (!turnPhase) {
         return '<div class="item turnPhase"><strong>' + session.module.name + '</strong><div>Phase: ' + session.phase.name + '</div><div class="muted">' + formatClock(session.phaseClock) + '</div></div>';
       }
       const steps = Array.from({ length: turnPhase.phase.total }, (_, index) => '<span class="phaseStep' + (index === turnPhase.phase.index ? " active" : "") + '"></span>').join("");
-      return '<div class="item turnPhase"><div class="turnPhaseHeader"><span class="pill">Tour ' + turnPhase.turn + '</span><span class="pill">Phase ' + (turnPhase.phase.index + 1) + '/' + turnPhase.phase.total + '</span></div><div class="turnPhaseName">' + turnPhase.phase.name + '</div><div class="phaseTrack" style="--phase-total:' + turnPhase.phase.total + '">' + steps + '</div><div class="muted">' + formatTurnPhase(turnPhase, session.phaseClock) + '</div></div>';
+      return '<div class="item turnPhase"><div class="turnPhaseHeader"><span class="pill">Tour ' + turnPhase.turn + '</span><span class="pill">Phase ' + (turnPhase.phase.index + 1) + '/' + turnPhase.phase.total + '</span></div><div class="turnPhaseName">' + turnPhase.phase.name + '</div><div class="phaseTrack" style="--phase-total:' + turnPhase.phase.total + '">' + steps + '</div><div class="timerGauge"><span style="width:' + timerPercent(turnPhase) + '%"></span></div><div class="muted">' + formatTurnPhase(turnPhase, session.phaseClock) + '</div></div>';
     }
     function renderPhasePlanSummary(session) {
       const plan = session.phasePlan;
@@ -3553,7 +3620,7 @@ function renderIndex(): string {
       const controls = (mechanic.inputs || []).map((input) => dashboardActionInputControl(session, input)).join("");
       const disabled = actors.length === 0 ? " disabled" : "";
       const hint = actors.length === 0 ? '<div class="muted">Aucun acteur autorise dans cette phase.</div>' : "";
-      return '<div class="item actionCard ' + cssClass + ' action-' + (mechanic.family || "generic") + '"><div class="actionHeader"><strong>' + (themeIcon(session, mechanic.family || action.id) ? themeIcon(session, mechanic.family || action.id) + " " : "") + action.name + '</strong><span class="actionMeta">' + (mechanic.family || "action") + '</span></div><div class="muted">' + (mechanic.summary || action.fallback || action.id) + '</div>' + interactionCue(session, { ...action, mechanicFamily: mechanic.family }) + hint + '<label>Acteur</label><select data-live-actor>' + actorOptions + '</select>' + dashboardContactConfirm(mechanic) + controls + '<button class="secondary ' + buttonClass + '" data-action-id="' + action.id + '"' + disabled + '>' + buttonLabel + '</button></div>';
+      return '<div class="item actionCard ' + cssClass + ' action-' + (mechanic.family || "generic") + '"><div class="actionHeader"><strong><span class="actionIcon">' + actionIcon(session, { ...action, mechanicFamily: mechanic.family }) + '</span> ' + action.name + '</strong><span class="actionMeta">' + (mechanic.family || "action") + '</span></div><div class="muted">' + (mechanic.summary || action.fallback || action.id) + '</div>' + interactionCue(session, { ...action, mechanicFamily: mechanic.family }) + hint + '<label>Acteur</label><select data-live-actor>' + actorOptions + '</select>' + dashboardContactConfirm(mechanic) + controls + '<button class="secondary ' + buttonClass + '" data-action-id="' + action.id + '"' + disabled + '>' + buttonLabel + '</button></div>';
     }
     function renderGameControls(session) {
       const actions = (session.module.actions || []).filter((action) => {
@@ -3863,33 +3930,51 @@ function renderParticipantApp(): string {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Ludovive Participant</title>
   <style>
-    :root { color-scheme: dark; --bg: #101214; --panel: #181b1f; --line: #343a42; --ink: #f2f4f5; --muted: #aab2bb; --accent: #b94b42; --green: #3f6b4d; --blue: #315875; --warning: #b88a3b; }
+    :root { color-scheme: dark; --bg: #101214; --panel: #181b1f; --surface: #111417; --field: #0d0f11; --line: #343a42; --ink: #f2f4f5; --muted: #aab2bb; --accent: #b94b42; --green: #3f6b4d; --blue: #315875; --warning: #b88a3b; --radius: 8px; }
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: Arial, sans-serif; background: var(--bg); color: var(--ink); }
+    body { margin: 0; font-family: Arial, sans-serif; background: radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 12%, transparent), transparent 22rem), var(--bg); color: var(--ink); }
     main { width: min(560px, 100%); margin: 0 auto; padding: 16px; }
     h1 { margin: 0 0 4px; font-size: 26px; }
     h2 { margin: 0 0 12px; font-size: 18px; }
-    section { border: 1px solid var(--line); border-radius: 8px; padding: 14px; background: var(--panel); margin: 14px 0; }
+    section { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; background: color-mix(in srgb, var(--panel) 94%, black); margin: 14px 0; box-shadow: 0 1px 0 rgba(255,255,255,.04) inset; }
     label { display: block; margin: 10px 0 5px; color: var(--muted); font-size: 13px; }
     input, select, button { width: 100%; font: inherit; border-radius: 6px; border: 1px solid #4b535d; padding: 11px; }
-    input, select { background: #0d0f11; color: var(--ink); }
-    button { background: var(--accent); color: white; cursor: pointer; margin-top: 12px; min-height: 44px; }
+    input, select { background: var(--field); color: var(--ink); }
+    button { background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 88%, white), var(--accent)); color: white; cursor: pointer; margin-top: 12px; min-height: 44px; font-weight: 700; box-shadow: 0 1px 0 rgba(255,255,255,.14) inset; }
     button.secondary { background: #315875; }
     button.success { background: var(--green); }
     button.neutral { background: #30363d; }
     .muted { color: var(--muted); }
     .pill { display: inline-block; padding: 4px 8px; border: 1px solid #59616b; border-radius: 999px; margin: 2px; font-size: 12px; color: #dce1e6; }
     .stack { display: grid; gap: 10px; }
-    .item { border: 1px solid #2f353c; border-radius: 8px; padding: 10px; background: #111417; }
+    .brandLine { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
+    .brandMark { display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 72%, black); color: white; font-weight: 800; letter-spacing: .04em; }
+    .item { border: 1px solid #2f353c; border-radius: var(--radius); padding: 10px; background: var(--surface); }
     .actionHeader { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
     .actionHeader strong { margin: 0; }
     .actionMeta { flex: 0 0 auto; color: var(--muted); font-size: 12px; border: 1px solid #59616b; border-radius: 999px; padding: 3px 7px; }
     .resourceWallet { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
-    .resourceChip { display: grid; grid-template-columns: 34px 1fr; align-items: center; gap: 8px; border: 1px solid #3c454f; border-radius: 8px; padding: 9px; min-width: 0; background: #0d0f11; }
+    .resourceChip { display: grid; grid-template-columns: 34px 1fr; align-items: center; gap: 8px; border: 1px solid #3c454f; border-radius: var(--radius); padding: 9px; min-width: 0; background: var(--field); }
     .resourceChip .resourceValue { font-size: 22px; font-weight: 700; line-height: 1; }
     .resourceChip .resourceName { color: var(--muted); font-size: 12px; line-height: 1.2; overflow-wrap: anywhere; }
     .resolutionFocus { border-color: color-mix(in srgb, var(--warning) 55%, var(--line)); }
     .themeStrip { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, var(--panel)), var(--panel)); }
+    .gestureCard { display: grid; grid-template-columns: 92px 1fr; gap: 10px; align-items: center; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); border-radius: var(--radius); margin-top: 8px; padding: 8px; background: color-mix(in srgb, var(--accent) 11%, var(--surface)); }
+    .gestureTitle { font-weight: 700; }
+    .gestureTag { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .gestureArt { position: relative; height: 58px; border-radius: 8px; background: color-mix(in srgb, var(--field) 72%, var(--accent)); overflow: hidden; }
+    .phone { position: absolute; width: 24px; height: 42px; border: 2px solid var(--ink); border-radius: 6px; background: #0b0d0f; box-shadow: 0 0 0 1px rgba(0,0,0,.4); }
+    .phone:after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 3px; height: 2px; border-radius: 999px; background: var(--muted); }
+    .phoneA { left: 17px; top: 8px; transform: rotate(-8deg); }
+    .phoneB { right: 17px; top: 8px; transform: rotate(8deg); }
+    .motion { position: absolute; width: 9px; height: 9px; border-radius: 999px; border: 2px solid var(--warning); opacity: .9; }
+    .m1 { left: 43px; top: 16px; } .m2 { left: 54px; top: 27px; } .m3 { left: 64px; top: 38px; }
+    .gesture-pour-liquid .phoneA { transform: rotate(-36deg); top: 2px; }
+    .gesture-touch-phones .phoneA { left: 28px; transform: rotate(0deg); } .gesture-touch-phones .phoneB { right: 28px; transform: rotate(0deg); }
+    .gesture-strike-phone .phoneA { transform: rotate(-42deg); left: 20px; top: 4px; } .gesture-strike-phone .phoneB { transform: rotate(48deg); right: 20px; top: 11px; }
+    .gesture-parry-phone .phoneA { transform: rotate(52deg); left: 22px; } .gesture-parry-phone .phoneB { transform: rotate(-52deg); right: 22px; }
+    .gesture-ballot-drop .phoneA { transform: rotate(90deg); top: 14px; left: 34px; } .gesture-ballot-drop .phoneB { opacity: .25; }
+    .gesture-palm-cover .phoneA { left: 34px; } .gesture-palm-cover .phoneB { width: 40px; height: 22px; right: 18px; top: 18px; border-radius: 999px; opacity: .55; }
     .gestureCue { display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); border-radius: 999px; margin-top: 8px; background: color-mix(in srgb, var(--accent) 15%, transparent); font-size: 13px; }
     .fallbackCue { color: var(--muted); font-size: 12px; margin-top: 4px; }
     .action-exchange { border-color: color-mix(in srgb, var(--green) 55%, var(--line)); }
@@ -3900,7 +3985,7 @@ function renderParticipantApp(): string {
     .resourcePushGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-top: 9px; }
     .resourcePushTile { border: 1px solid #3c454f; border-radius: 8px; padding: 9px; background: #111417; min-width: 0; }
     .resourcePushTile strong { display: flex; align-items: center; gap: 7px; min-height: 36px; font-size: 13px; line-height: 1.2; }
-    .resourceIcon { flex: 0 0 auto; display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 24%, #0d0f11); color: var(--ink); font-weight: 700; font-size: 12px; }
+    .resourceIcon, .actionIcon { flex: 0 0 auto; display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 24%, #0d0f11); color: var(--ink); font-weight: 800; font-size: 11px; }
     .resourceAmount { font-size: 22px; font-weight: 700; margin-top: 4px; }
     .resourcePushControls { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
     .resourcePushControls button { min-height: 38px; margin: 0; padding: 7px; }
@@ -3911,6 +3996,8 @@ function renderParticipantApp(): string {
     .phaseTrack { display: grid; grid-template-columns: repeat(var(--phase-total, 1), minmax(0, 1fr)); gap: 4px; }
     .phaseStep { height: 7px; border-radius: 999px; background: #30363d; }
     .phaseStep.active { background: var(--accent); }
+    .timerGauge { height: 8px; border-radius: 999px; background: #30363d; overflow: hidden; }
+    .timerGauge span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), var(--warning)); }
     @media (max-width: 380px) { .resourcePushGrid, .resourceWallet { grid-template-columns: 1fr; } }
     .error { color: #ffb1a8; min-height: 20px; }
     .hidden { display: none; }
@@ -3919,8 +4006,7 @@ function renderParticipantApp(): string {
 </head>
 <body>
   <main>
-    <h1>Ludovive</h1>
-    <div class="muted">App participant</div>
+    <div class="brandLine"><span class="brandMark">LV</span><div><h1>Ludovive</h1><div class="muted">App participant</div></div></div>
 
     <section id="joinPanel">
       <h2>Rejoindre une session</h2>
@@ -4037,7 +4123,17 @@ function renderParticipantApp(): string {
         cf100: "100F",
         cm25: "25M",
         cm50: "50M",
-        cm100: "100M"
+        cm100: "100M",
+        gold: "Au",
+        income: "Inc",
+        favor: "Fav",
+        status: "Sta",
+        hull: "Hull",
+        oxygen: "O2",
+        battery: "Bat",
+        noise: "N",
+        torpedoes: "Tor",
+        intel: "Int"
       };
       return icons[resourceId] || resourceId.slice(0, 2).toUpperCase();
     }
@@ -4048,11 +4144,56 @@ function renderParticipantApp(): string {
       Object.entries(map).forEach(([key, cssVar]) => { if (colors[key]) root.style.setProperty(cssVar, colors[key]); });
     }
     function themeIcon(model, key) {
-      return (model.module.uiTheme?.icons || {})[key] || "";
+      const icon = (model.module.uiTheme?.icons || {})[key] || "";
+      return /^[\x20-\x7E]{1,4}$/.test(icon) ? icon : "";
+    }
+    function actionIcon(model, action) {
+      const key = action.mechanicFamily || action.id;
+      const fallback = {
+        exchange: "TR",
+        contest: "ATK",
+        vote: "VOT",
+        petition: "PET",
+        market: "MKT",
+        "timed-income": "INC",
+        "live-administration": "ADM",
+        coordination: "CMD",
+        "resource-action": "SYS"
+      };
+      const themed = themeIcon(model, key);
+      return /^[\x20-\x7E]{1,4}$/.test(themed) ? themed : fallback[key] || "ACT";
+    }
+    function gestureMeta(gesture) {
+      const gestures = {
+        "touch-phones": { label: "Contact telephones", detail: "Les deux telephones se touchent avant validation.", proximity: "contact requis" },
+        "pour-liquid": { label: "Verser", detail: "Incline ton telephone vers l'autre joueur pour pousser les ressources.", proximity: "telephones proches" },
+        "shake-phones": { label: "Serrer", detail: "Mouvement bref de poignee de main avec les telephones.", proximity: "meme table" },
+        "tap-stack": { label: "Poser sur la pile", detail: "Touche la zone ou la pile physique qui represente le marche.", proximity: "zone de table" },
+        "palm-cover": { label: "Couvrir", detail: "Couvre l'ecran pour une transaction discrete.", proximity: "a vue courte" },
+        "ballot-drop": { label: "Deposer", detail: "Pose le telephone comme un bulletin dans l'urne.", proximity: "zone de vote" },
+        "strike-phone": { label: "Frapper", detail: "Mouvement d'attaque court avec le telephone.", proximity: "duel proche" },
+        "parry-phone": { label: "Parer", detail: "Presente ton telephone en parade pendant le compte a rebours.", proximity: "duel proche" },
+        "hold-phone-up": { label: "Lever", detail: "Leve le telephone pour signaler un ordre.", proximity: "visible equipe" },
+        "tilt-phone-forward": { label: "Incliner", detail: "Incline vers l'avant pour engager une action de poste.", proximity: "poste de table" },
+        "phone-face-down": { label: "Retourner", detail: "Retourne le telephone face contre table.", proximity: "poste de table" },
+        "slow-phone-arc": { label: "Balayage", detail: "Trace un arc lent pour une recherche ou un sonar.", proximity: "poste de table" },
+        "slide-resource-to-edge": { label: "Pousser au bord", detail: "Fais glisser les jetons vers le bord de l'ecran.", proximity: "contact de table" }
+      };
+      return gestures[gesture] || { label: gesture, detail: "Geste declare par le module importe.", proximity: "selon module" };
+    }
+    function gestureArt(gesture) {
+      const className = String(gesture || "generic").replace(/[^a-z0-9-]/g, "");
+      return '<div class="gestureArt gesture-' + className + '"><span class="phone phoneA"></span><span class="phone phoneB"></span><span class="motion m1"></span><span class="motion m2"></span><span class="motion m3"></span></div>';
+    }
+    function renderGestureCard(model, action) {
+      if (!action.gesture) return "";
+      const meta = gestureMeta(action.gesture);
+      const primary = model.module.uiTheme?.interactionLabels?.primary || "Geste";
+      return '<div class="gestureCard">' + gestureArt(action.gesture) + '<div><div class="gestureTitle"><span class="actionIcon">' + actionIcon(model, action) + '</span> ' + primary + ': ' + (action.gestureLabel || meta.label) + '</div><div class="gestureTag">' + meta.proximity + '</div><div class="muted">' + meta.detail + '</div></div></div>';
     }
     function renderThemeStrip(model) {
       const theme = model.module.uiTheme || {};
-      return '<div class="item themeStrip"><strong>' + (theme.icons?.game || "") + ' ' + model.module.name + '</strong><div class="muted">' + (theme.tone || "Partie en cours") + '</div></div>';
+      return '<div class="item themeStrip"><strong><span class="actionIcon">' + (themeIcon(model, "game") || "LV") + '</span> ' + model.module.name + '</strong><div class="muted">' + (theme.tone || "Partie en cours") + '</div></div>';
     }
     function formatStatusValue(value) {
       if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
@@ -4087,11 +4228,16 @@ function renderParticipantApp(): string {
       const duration = turnPhase.durationSeconds ? turnPhase.durationSeconds + "s" : "sans duree";
       return "Tour " + turnPhase.turn + " - Phase " + (turnPhase.phase.index + 1) + "/" + turnPhase.phase.total + " - " + duration + " - fin " + end;
     }
+    function timerPercent(turnPhase) {
+      if (!turnPhase?.endsAt || !turnPhase.durationSeconds) return 100;
+      const remaining = Math.max(0, new Date(turnPhase.endsAt).getTime() - Date.now());
+      return Math.max(0, Math.min(100, Math.round((remaining / (turnPhase.durationSeconds * 1000)) * 100)));
+    }
     function renderTurnPhase(model) {
       const turnPhase = model.turnPhase;
       if (!turnPhase) return '<div class="item turnPhase"><strong>Phase ' + model.phase.name + '</strong><div class="muted">' + formatClock(model.phaseClock) + '</div></div>';
       const steps = Array.from({ length: turnPhase.phase.total }, (_, index) => '<span class="phaseStep' + (index === turnPhase.phase.index ? " active" : "") + '"></span>').join("");
-      return '<div class="item turnPhase"><div class="turnPhaseHeader"><span class="pill">Tour ' + turnPhase.turn + '</span><span class="pill">Phase ' + (turnPhase.phase.index + 1) + '/' + turnPhase.phase.total + '</span></div><div class="turnPhaseName">' + turnPhase.phase.name + '</div><div class="phaseTrack" style="--phase-total:' + turnPhase.phase.total + '">' + steps + '</div><div class="muted">' + formatTurnPhase(turnPhase, model.phaseClock) + '</div></div>';
+      return '<div class="item turnPhase"><div class="turnPhaseHeader"><span class="pill">Tour ' + turnPhase.turn + '</span><span class="pill">Phase ' + (turnPhase.phase.index + 1) + '/' + turnPhase.phase.total + '</span></div><div class="turnPhaseName">' + turnPhase.phase.name + '</div><div class="phaseTrack" style="--phase-total:' + turnPhase.phase.total + '">' + steps + '</div><div class="timerGauge"><span style="width:' + timerPercent(turnPhase) + '%"></span></div><div class="muted">' + formatTurnPhase(turnPhase, model.phaseClock) + '</div></div>';
     }
     function renderPhasePlanSummary(model) {
       const plan = model.phasePlan;
@@ -4179,11 +4325,8 @@ function renderParticipantApp(): string {
       return action.fallback || action.id;
     }
     function interactionCue(model, action) {
-      const primary = model.module.uiTheme?.interactionLabels?.primary || "Geste";
       const fallback = model.module.uiTheme?.interactionLabels?.fallback || "Bouton de secours";
-      const icon = themeIcon(model, action.mechanicFamily || action.id);
-      const gesture = action.gesture ? '<div class="gestureCue">' + icon + ' ' + primary + ': ' + (action.gestureLabel || action.gesture) + '</div>' : "";
-      return gesture + '<div class="fallbackCue">' + fallback + ': ' + (action.fallback || "confirmation manuelle") + '</div>';
+      return renderGestureCard(model, action) + '<div class="fallbackCue">' + fallback + ': ' + (action.fallback || "confirmation manuelle") + '</div>';
     }
     function actionForm(model, action) {
       const inputs = action.inputs || [];
@@ -4194,8 +4337,7 @@ function renderParticipantApp(): string {
       return '<div class="actionInputs">' + contact + inputs.map((input) => actionInputControl(model, input)).join("") + '</div>';
     }
     function renderActionCard(model, action) {
-      const icon = themeIcon(model, action.mechanicFamily || action.id);
-      return '<div class="item actionCard action-' + (action.mechanicFamily || "generic") + '"><div class="actionHeader"><strong>' + (icon ? icon + " " : "") + action.name + '</strong><span class="actionMeta">' + (action.mechanicFamily || "action") + '</span></div><div class="muted">' + actionHint(action) + '</div>' + interactionCue(model, action) + actionForm(model, action) + '<button class="secondary actionButton" data-action-id="' + action.id + '">' + actionVerb(action) + '</button></div>';
+      return '<div class="item actionCard action-' + (action.mechanicFamily || "generic") + '"><div class="actionHeader"><strong><span class="actionIcon">' + actionIcon(model, action) + '</span> ' + action.name + '</strong><span class="actionMeta">' + (action.mechanicFamily || "action") + '</span></div><div class="muted">' + actionHint(action) + '</div>' + interactionCue(model, action) + actionForm(model, action) + '<button class="secondary actionButton" data-action-id="' + action.id + '">' + actionVerb(action) + '</button></div>';
     }
     function collectActionPayload(card) {
       const payload = {};

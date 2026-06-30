@@ -25,6 +25,7 @@
 3. Economic Simulation Slice: resource exchanges plus dashboard aggregates for sheep/market or monetary confidence simulations.
 4. Putsch MVP+: complete playable Putsch table with clean player UI, hidden coup commitments, election, council, and playtest script.
 5. UI/Ergo MVP: table-first interface with readable phase state, resource wallets, gesture-first action cards, and module visual identity.
+6. Design System Ludovive: compact shared components, icons, timers, gesture illustrations, and resilient module theming.
 
 ## Epics
 

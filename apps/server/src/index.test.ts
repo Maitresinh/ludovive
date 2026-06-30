@@ -133,7 +133,7 @@ test("serves a one-page Putsch core demo dashboard", async () => {
   const response = await app.inject({ method: "GET", url: "/" });
 
   assert.equal(response.statusCode, 200);
-  assert.match(response.body, /Putsch au Panador core/);
+  assert.match(response.body, /Interface de jeu live/);
   assert.match(response.body, /id="participantLink"/);
   assert.match(response.body, /Copier lien participant/);
   assert.match(response.body, /navigator.clipboard/);
@@ -147,6 +147,8 @@ test("serves a one-page Putsch core demo dashboard", async () => {
   assert.match(response.body, /renderMvpPanel/);
   assert.match(response.body, /ergoNowBoard/);
   assert.match(response.body, /statTile/);
+  assert.match(response.body, /brandMark/);
+  assert.match(response.body, /timerGauge/);
   assert.match(response.body, /renderTurnPhase/);
   assert.match(response.body, /formatTurnPhase/);
   assert.match(response.body, /renderPhasePlanSummary/);
@@ -161,6 +163,10 @@ test("serves a one-page Putsch core demo dashboard", async () => {
   assert.match(response.body, /renderDashboardParticipants/);
   assert.match(response.body, /actionHeader/);
   assert.match(response.body, /actionMeta/);
+  assert.match(response.body, /actionIcon/);
+  assert.match(response.body, /gestureCard/);
+  assert.match(response.body, /gestureArt/);
+  assert.match(response.body, /renderGestureCard/);
   assert.match(response.body, /resourceWallet/);
   assert.match(response.body, /resourcePushGrid/);
   assert.match(response.body, /Secours dashboard/);
@@ -221,6 +227,12 @@ test("serves a mobile participant app for session join", async () => {
   assert.match(response.body, /renderPhasePlanSummary/);
   assert.match(response.body, /renderResourceWallet/);
   assert.match(response.body, /renderActionCard/);
+  assert.match(response.body, /brandMark/);
+  assert.match(response.body, /timerGauge/);
+  assert.match(response.body, /actionIcon/);
+  assert.match(response.body, /gestureCard/);
+  assert.match(response.body, /gestureArt/);
+  assert.match(response.body, /renderGestureCard/);
   assert.match(response.body, /resourceWallet/);
   assert.match(response.body, /resolutionFocus/);
   assert.match(response.body, /Plan de phase/);
