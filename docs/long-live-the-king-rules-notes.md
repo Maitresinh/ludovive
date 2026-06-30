@@ -17,6 +17,9 @@ Use the spreadsheet as the source of truth for detailed character sheets, role n
 - Intrigue cards are freely tradable and start at 2 per main courtier.
 - Status cards are distributed from the role's current `status` resource.
 - Audience income and Intrigue draws are handled through the `hold-audience` action, with odd/even turn draw counts, Queen fixed draws, Archbishop bonus support, and low-Status income reduction.
+- Council petitions now run as a real module flow: a courtier opens a petition, participants can spend Favor for or against it, and the King or authority resolves it as accepted, rejected, or deferred.
+- The petition flow is reusable: `castPetitionVote` records weighted votes on a pending petition, while `resolvePetition` writes the royal decision and closes the resolution.
+- Long Live now carries its own `court-intrigue` UI theme and soundboard cues for audience, petition reading, favor commitment, and royal decision.
 - Health uses 10 cards, with 6 lined up at setup; no health card is normally revealed on turn 1.
 - Mobilization and Rebellion are public 5-card tracks.
 - The last Council cannot be missed by the King.

@@ -654,6 +654,21 @@ const finalizeVoteEffectSchema = z.object({
   eliminatedParticipantState: z.string().min(1).optional()
 });
 
+const castPetitionVoteEffectSchema = z.object({
+  type: z.literal("castPetitionVote"),
+  resource: z.string().min(1),
+  resolutionMechanicId: z.string().min(1),
+  choices: z.array(z.string().min(1)).default(["for", "against"]),
+  voteState: z.string().min(1).default("petitionVotes")
+});
+
+const resolvePetitionEffectSchema = z.object({
+  type: z.literal("resolvePetition"),
+  resolutionMechanicId: z.string().min(1),
+  allowedOutcomes: z.array(z.string().min(1)).default(["accepted", "rejected", "deferred"]),
+  resultState: z.string().min(1).default("lastPetitionResult")
+});
+
 const marketBuyEffectSchema = z.object({
   type: z.literal("marketBuy"),
   resource: z.string().min(1),
@@ -690,6 +705,8 @@ const knownEffectSchema = z.discriminatedUnion("type", [
   runTimedIncomeEffectSchema,
   castVoteEffectSchema,
   finalizeVoteEffectSchema,
+  castPetitionVoteEffectSchema,
+  resolvePetitionEffectSchema,
   marketBuyEffectSchema
 ]);
 
@@ -1528,6 +1545,105 @@ function runFinalizeVote(session: Session, effect: z.infer<typeof finalizeVoteEf
   return result;
 }
 
+function findOpenResolution(session: Session, mechanicId: string, resolutionId?: unknown): PendingResolution {
+  const resolution = typeof resolutionId === "string"
+    ? session.pendingResolutions.find((candidate) => candidate.id === resolutionId)
+    : session.pendingResolutions.find((candidate) => candidate.mechanicId === mechanicId);
+  if (!resolution || resolution.mechanicId !== mechanicId) {
+    throw new Error(`No pending resolution for mechanic ${mechanicId}`);
+  }
+  return resolution;
+}
+
+function petitionVoteTotals(votes: Record<string, unknown>, choices: string[]): Record<string, number> {
+  return Object.values(votes).reduce<Record<string, number>>((totals, vote) => {
+    const entry = objectRecord(vote);
+    const choice = typeof entry?.choice === "string" ? entry.choice : undefined;
+    const weight = Number(entry?.weight ?? 0);
+    if (choice && choices.includes(choice) && Number.isFinite(weight)) {
+      totals[choice] = (totals[choice] ?? 0) + weight;
+    }
+    return totals;
+  }, Object.fromEntries(choices.map((choice) => [choice, 0])));
+}
+
+function runCastPetitionVote(session: Session, module: GameModule, participant: Participant, effect: z.infer<typeof castPetitionVoteEffectSchema>, event: EventInput): Record<string, unknown> {
+  const pendingResolution = findOpenResolution(session, effect.resolutionMechanicId, event.payload.resolutionId);
+  const choice = typeof event.payload.choice === "string" ? event.payload.choice : undefined;
+  const weight = Math.floor(Number(event.payload.weight ?? 1));
+  if (!choice || !effect.choices.includes(choice)) {
+    throw new Error("Petition vote requires a valid choice");
+  }
+  if (!Number.isInteger(weight) || weight <= 0) {
+    throw new Error("Petition vote weight must be a positive integer");
+  }
+
+  assertResourceChange(module, participant, effect.resource, -weight);
+  const resourceChange = adjustResource(module, participant, effect.resource, -weight);
+  const payload = objectRecord(pendingResolution.payload) ?? {};
+  const votes = objectRecord(payload[effect.voteState]) ?? {};
+  votes[participant.id] = {
+    participantId: participant.id,
+    choice,
+    weight,
+    votedAt: new Date().toISOString()
+  };
+  const totals = petitionVoteTotals(votes, effect.choices);
+  pendingResolution.payload = {
+    ...payload,
+    [effect.voteState]: votes,
+    petitionVoteTotals: totals
+  };
+  participant.statuses.lastPetitionVote = {
+    resolutionId: pendingResolution.id,
+    choice,
+    weight,
+    at: new Date().toISOString()
+  };
+
+  return {
+    type: effect.type,
+    resolutionId: pendingResolution.id,
+    mechanicId: pendingResolution.mechanicId,
+    choice,
+    weight,
+    resourceChange,
+    totals
+  };
+}
+
+function runResolvePetition(session: Session, effect: z.infer<typeof resolvePetitionEffectSchema>, event: EventInput): Record<string, unknown> {
+  if (!hasInjectionAuthority(session)) {
+    throw new Error("Injection authority is required for petition resolution");
+  }
+  const outcome = typeof event.payload.outcome === "string" ? event.payload.outcome : "deferred";
+  if (!effect.allowedOutcomes.includes(outcome)) {
+    throw new Error("Petition resolution requires a valid outcome");
+  }
+  const pendingResolution = findOpenResolution(session, effect.resolutionMechanicId, event.payload.resolutionId);
+  const payload = objectRecord(pendingResolution.payload) ?? {};
+  const result = {
+    type: effect.type,
+    resolutionId: pendingResolution.id,
+    mechanicId: pendingResolution.mechanicId,
+    outcome,
+    petitionText: payload.petitionText,
+    petitionVoteTotals: objectRecord(payload.petitionVoteTotals) ?? {},
+    decidedBy: event.participantId,
+    decidedAt: new Date().toISOString()
+  };
+  session.statuses[effect.resultState] = result;
+  const resolveResult = resolvePendingResolution(session, pendingResolution.id, {
+    outcome,
+    note: typeof event.payload.note === "string" ? event.payload.note : undefined,
+    payload: objectRecord(event.payload.payload) ?? {}
+  });
+  return {
+    ...result,
+    resolveResult
+  };
+}
+
 function marketPurchaseKey(session: Session, resource: string): string {
   return `${session.phaseClock.turn}:${currentPhase(session).id}:${resource}`;
 }
@@ -1664,6 +1780,14 @@ function applyEffect(session: Session, module: GameModule, participant: Particip
 
   if (effect.type === "finalizeVote") {
     return runFinalizeVote(session, effect);
+  }
+
+  if (effect.type === "castPetitionVote") {
+    return runCastPetitionVote(session, module, participant, effect, event);
+  }
+
+  if (effect.type === "resolvePetition") {
+    return runResolvePetition(session, effect, event);
   }
 
   if (effect.type === "marketBuy") {
@@ -2153,6 +2277,24 @@ function actionBlockedBy(session: Session, participant: Participant, action: Gam
     });
     if (!hasPendingContest) {
       blockedBy.push("pendingContest");
+    }
+  }
+  if (effect?.type === "castPetitionVote") {
+    const mechanicId = typeof effect.resolutionMechanicId === "string" ? effect.resolutionMechanicId : action.mechanicId;
+    const hasPendingPetition = session.pendingResolutions.some((resolution) => resolution.mechanicId === mechanicId);
+    if (!hasPendingPetition) {
+      blockedBy.push("pendingPetition");
+    }
+    const resourceId = typeof effect.resource === "string" ? effect.resource : undefined;
+    if (resourceId && (participant.resources[resourceId] ?? 0) <= 0) {
+      blockedBy.push(`resource:${resourceId}`);
+    }
+  }
+  if (effect?.type === "resolvePetition") {
+    const mechanicId = typeof effect.resolutionMechanicId === "string" ? effect.resolutionMechanicId : action.mechanicId;
+    const hasPendingPetition = session.pendingResolutions.some((resolution) => resolution.mechanicId === mechanicId);
+    if (!hasPendingPetition) {
+      blockedBy.push("pendingPetition");
     }
   }
 

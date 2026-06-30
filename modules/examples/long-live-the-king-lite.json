@@ -12,6 +12,39 @@
     "decisionPhaseId": "council",
     "notes": "Chaque tour suit Audience, Diplomatie, Conseil. L'Audience distribue revenus et cartes d'intrigue; le Conseil tranche les petitions. Le dernier conseil ne peut pas etre manque par le roi."
   },
+  "uiTheme": {
+    "template": "court-intrigue",
+    "tone": "Cour royale, faveurs, petitions publiques et intrigues sous tentures.",
+    "colors": {
+      "background": "#17130f",
+      "panel": "#241f19",
+      "ink": "#f3ead8",
+      "muted": "#c5b48f",
+      "accent": "#8f2f3f",
+      "secondary": "#35506d",
+      "success": "#53724a",
+      "warning": "#b78b35"
+    },
+    "icons": {
+      "game": "LLK",
+      "petition": "!",
+      "timed-income": "$",
+      "exchange": "<>",
+      "track": "T",
+      "audience": "A",
+      "council": "C"
+    },
+    "interactionLabels": {
+      "primary": "Geste de cour",
+      "fallback": "Validation tactile"
+    }
+  },
+  "soundboard": [
+    { "id": "audience-bell", "name": "Cloche d'audience", "channel": "stinger", "phase": "audience", "tone": "cloche claire et murmure de cour", "visibility": "all" },
+    { "id": "petition-read", "name": "Petition lue", "channel": "event", "event": "openVote", "phase": "council", "tone": "parchemin deployee et silence de salle", "visibility": "all" },
+    { "id": "favor-cast", "name": "Faveur engagee", "channel": "event", "event": "castPetitionVote", "phase": "council", "tone": "jeton pose sur bois", "visibility": "participants" },
+    { "id": "royal-decision", "name": "Decision royale", "channel": "alert", "event": "resolvePetition", "phase": "council", "tone": "marteau et annonce solennelle", "visibility": "all" }
+  ],
   "state": {
     "currentTurn": 1,
     "kingHealthy": true,
@@ -236,6 +269,38 @@
       "target": "game",
       "effect": { "type": "openVote", "weightResource": "favor" },
       "mechanicId": "petition-vote"
+    },
+    {
+      "id": "vote-petition",
+      "name": "Engager de la faveur sur une petition",
+      "phase": "council",
+      "actor": "any",
+      "target": "game",
+      "effect": {
+        "type": "castPetitionVote",
+        "resource": "favor",
+        "resolutionMechanicId": "petition-vote",
+        "choices": ["for", "against"],
+        "voteState": "petitionVotes"
+      },
+      "mechanicId": "petition-vote",
+      "gesture": "ballot-drop",
+      "fallback": "manual-confirmation"
+    },
+    {
+      "id": "resolve-petition",
+      "name": "Trancher la petition",
+      "phase": "council",
+      "actor": "king",
+      "target": "game",
+      "effect": {
+        "type": "resolvePetition",
+        "resolutionMechanicId": "petition-vote",
+        "allowedOutcomes": ["accepted", "rejected", "deferred"],
+        "resultState": "lastPetitionResult"
+      },
+      "mechanicId": "petition-vote",
+      "fallback": "facilitator-confirmation"
     },
     {
       "id": "hold-audience",

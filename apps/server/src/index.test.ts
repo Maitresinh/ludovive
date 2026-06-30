@@ -439,6 +439,8 @@ test("loads module mechanics and links actions to them", async () => {
   assert.equal(wolfpack.sessionRoles.find((role: JsonObject) => role.id === "host").canInjectGameElements, false);
   const king = await injectJson("GET", "/modules/long-live-the-king-lite");
   assert.equal(king.state.healthCardsInLine, 6);
+  assert.equal(king.uiTheme.template, "court-intrigue");
+  assert.equal(king.soundboard.find((cue: JsonObject) => cue.id === "royal-decision").channel, "alert");
   assert.equal(king.components.find((component: JsonObject) => component.id === "health-card").count, 10);
   assert.equal(king.roles.find((role: JsonObject) => role.id === "king").name, "Roi");
   assert.equal(king.sessionRoles.find((role: JsonObject) => role.id === "game-authority").defaultRoleId, "king");
@@ -446,6 +448,8 @@ test("loads module mechanics and links actions to them", async () => {
   assert.equal(king.mechanics.find((mechanic: JsonObject) => mechanic.id === "audience-income").resolution.mode, "guidedInApp");
   assert.deepEqual(king.mechanics.find((mechanic: JsonObject) => mechanic.id === "audience-income").resolution.modes, ["guidedInApp", "liveThenRecord"]);
   assert.equal(king.actions.find((action: JsonObject) => action.id === "hold-audience").mechanicId, "audience-income");
+  assert.equal(king.actions.find((action: JsonObject) => action.id === "vote-petition").effect.type, "castPetitionVote");
+  assert.equal(king.actions.find((action: JsonObject) => action.id === "resolve-petition").effect.type, "resolvePetition");
   assert.equal(putsch.actions.find((action: JsonObject) => action.id === "embezzle-council-funds").phase, "first-council");
   assert.equal(putsch.actions.find((action: JsonObject) => action.id === "embezzle-council-funds").effect.delta, 5000);
 });
@@ -1356,6 +1360,71 @@ test("opens pending petition resolutions from module mechanics", async () => {
   const deviceModel = await injectJson("GET", `/sessions/${code}/read-models/device/${device.device.id}`);
   assert.equal(deviceModel.pendingResolutions[0].mechanicId, "petition-vote");
   assert.equal(deviceModel.pendingResolutions[0].phaseResolution.kind, "petition");
+});
+
+test("runs Long Live petition favor vote and royal decision end to end", async () => {
+  const session = await createSession("long-live-the-king-lite");
+  const code = session.code;
+  const authority = await createKingWithAuthority(code);
+  const queen = await createParticipant(code, "Reine", "queen");
+  const baron = await createParticipant(code, "Baron", "baron");
+  const treasurer = await createParticipant(code, "Tresorier", "treasurer");
+  await advancePhase(code);
+  await advancePhase(code);
+  await advancePhase(code);
+
+  const beforePetition = await injectJson("GET", `/sessions/${code}/read-models/participant/${baron.participant.id}`);
+  assert.equal(beforePetition.availableActions.some((action: JsonObject) => action.id === "vote-petition"), false);
+
+  const petition = await injectJson("POST", `/sessions/${code}/events`, {
+    type: "action.requested",
+    actionId: "submit-petition",
+    participantId: queen.participant.id,
+    payload: { petitionText: "Nommer la Reine regente jusqu'au prochain conseil" }
+  });
+  const resolutionId = petition.actionResult.effect.resolutionId;
+  assert.equal(petition.dashboard.pendingResolutions[0].payload.petitionText, "Nommer la Reine regente jusqu'au prochain conseil");
+  const duringPetition = await injectJson("GET", `/sessions/${code}/read-models/participant/${baron.participant.id}`);
+  assert.equal(duringPetition.availableActions.some((action: JsonObject) => action.id === "vote-petition"), true);
+
+  const baronVote = await injectJson("POST", `/sessions/${code}/events`, {
+    type: "action.requested",
+    actionId: "vote-petition",
+    participantId: baron.participant.id,
+    payload: { resolutionId, choice: "for", weight: 2 }
+  });
+  assert.equal(baronVote.actionResult.effect.type, "castPetitionVote");
+  assert.equal(baronVote.actionResult.effect.totals.for, 2);
+  assert.equal(baronVote.dashboard.participants.find((participant: JsonObject) => participant.id === baron.participant.id).resources.favor, 4);
+
+  const treasurerVote = await injectJson("POST", `/sessions/${code}/events`, {
+    type: "action.requested",
+    actionId: "vote-petition",
+    participantId: treasurer.participant.id,
+    payload: { resolutionId, choice: "against", weight: 3 }
+  });
+  assert.equal(treasurerVote.actionResult.effect.totals.for, 2);
+  assert.equal(treasurerVote.actionResult.effect.totals.against, 3);
+  assert.equal(treasurerVote.dashboard.pendingResolutions[0].payload.petitionVotes[baron.participant.id].choice, "for");
+  assert.equal(treasurerVote.dashboard.pendingResolutions[0].payload.petitionVoteTotals.against, 3);
+
+  const decision = await injectJson("POST", `/sessions/${code}/events`, {
+    type: "action.requested",
+    actionId: "resolve-petition",
+    participantId: authority.king.id,
+    payload: {
+      resolutionId,
+      outcome: "accepted",
+      note: "Le Roi tranche malgre l'opposition du Tresorier."
+    }
+  });
+  assert.equal(decision.actionResult.effect.type, "resolvePetition");
+  assert.equal(decision.actionResult.effect.outcome, "accepted");
+  assert.equal(decision.actionResult.effect.petitionVoteTotals.for, 2);
+  assert.equal(decision.actionResult.effect.petitionVoteTotals.against, 3);
+  assert.equal(decision.dashboard.statuses.lastPetitionResult.outcome, "accepted");
+  assert.equal(decision.dashboard.pendingResolutions.length, 0);
+  assert.equal(decision.dashboard.messages.at(-1).channel, "resolution");
 });
 
 test("opens pending contest resolutions from module mechanics", async () => {
