@@ -17,7 +17,7 @@ But: transformer Putsch de module de demonstration en jeu pilote complet, tout e
 | Echanges | Solide pour MVP | transferts immediats, proximite/fallback, audit | `exchange` |
 | Coup d'Etat | Partiel avance | engagements caches proteges cote joueur, deadline serveur, effets de cours; pouvoir final et cas limites restent incomplets | `sealed-contest` |
 | Conseil | Partiel | saisie/record et resolution guidee existent | `collective-phase` |
-| Election | Partiel | vote/tally existe, cloture et college a finaliser | `vote-engine` |
+| Election | Partiel solide | vote/tally + cloture declarative, statuts de college; departages fins MJ a enrichir | `vote-engine` |
 | Mine de cuivre | Partiel | cours et compteurs existent, ventes horaires non strictes | `market-economy` |
 | Score | Partiel solide | calcul estime declaratif par ressource, actions cuivre au cours courant, multiplicateur Paquito | `score-engine` |
 | Sons | Manquant | aucun schema son/module audio | `event-soundboard` |

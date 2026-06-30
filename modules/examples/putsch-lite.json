@@ -321,6 +321,16 @@
       ],
       "resolution": { "type": "tally", "state": "ministerElectionTally", "resource": "voteBallots" },
       "visibility": { "dashboard": "full", "participants": "own-vote-and-public-tally" }
+    },
+    {
+      "id": "minister-election-finalize",
+      "name": "Cloture de l'election du conseil",
+      "family": "vote",
+      "summary": "Le meneur cloture le vote, calcule les entrees/sorties du college et marque les statuts des conseillers.",
+      "phases": ["first-council"],
+      "inputs": [],
+      "resolution": { "type": "finalize", "state": "ministerElectionTally", "resultState": "ministerElectionResult" },
+      "visibility": { "dashboard": "full", "participants": "public-summary" }
     }
   ],
   "actions": [
@@ -420,6 +430,24 @@
       "mechanicId": "minister-election",
       "gesture": "ballot-drop",
       "fallback": "manual-confirmation"
+    },
+    {
+      "id": "finalize-minister-election",
+      "name": "Clore l'election du conseil",
+      "phase": "first-council",
+      "actor": "facilitator-capitalist",
+      "target": "game",
+      "effect": {
+        "type": "finalizeVote",
+        "state": "ministerElectionTally",
+        "resultState": "ministerElectionResult",
+        "promotionSlots": 3,
+        "eliminationSlots": 1,
+        "promotedParticipantState": "councilSeat",
+        "eliminatedParticipantState": "councilEliminated"
+      },
+      "mechanicId": "minister-election-finalize",
+      "fallback": "facilitator-confirmation"
     },
     {
       "id": "embezzle-council-funds",

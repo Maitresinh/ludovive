@@ -632,6 +632,16 @@ const castVoteEffectSchema = z.object({
   state: z.string().min(1)
 });
 
+const finalizeVoteEffectSchema = z.object({
+  type: z.literal("finalizeVote"),
+  state: z.string().min(1),
+  resultState: z.string().min(1),
+  promotionSlots: z.number().int().nonnegative().default(0),
+  eliminationSlots: z.number().int().nonnegative().default(0),
+  promotedParticipantState: z.string().min(1).optional(),
+  eliminatedParticipantState: z.string().min(1).optional()
+});
+
 const marketBuyEffectSchema = z.object({
   type: z.literal("marketBuy"),
   resource: z.string().min(1),
@@ -667,6 +677,7 @@ const knownEffectSchema = z.discriminatedUnion("type", [
   revealContactHintEffectSchema,
   runTimedIncomeEffectSchema,
   castVoteEffectSchema,
+  finalizeVoteEffectSchema,
   marketBuyEffectSchema
 ]);
 
@@ -1377,6 +1388,75 @@ function runCastVote(session: Session, module: GameModule, participant: Particip
   };
 }
 
+function voteStandings(session: Session, votes: Record<string, unknown>): Record<string, unknown>[] {
+  return Object.entries(votes).map(([participantId, voteCount]) => {
+    const participant = session.participants.find((candidate) => candidate.id === participantId);
+    return {
+      participantId,
+      name: participant?.name ?? participantId,
+      roleId: participant?.roleId,
+      votes: Number(voteCount ?? 0)
+    };
+  }).sort((left, right) => {
+    const voteDiff = Number(right.votes) - Number(left.votes);
+    if (voteDiff !== 0) {
+      return voteDiff;
+    }
+    return String(left.name).localeCompare(String(right.name));
+  });
+}
+
+function selectVoteLeaders(standings: Record<string, unknown>[], slots: number): Record<string, unknown>[] {
+  if (slots <= 0) {
+    return [];
+  }
+  return standings.slice(0, slots).map((entry, index) => {
+    const next = standings[index + 1];
+    const previous = standings[index - 1];
+    return {
+      ...entry,
+      tied: Number(next?.votes) === Number(entry.votes) || Number(previous?.votes) === Number(entry.votes)
+    };
+  });
+}
+
+function runFinalizeVote(session: Session, effect: z.infer<typeof finalizeVoteEffectSchema>): Record<string, unknown> {
+  const tally = objectRecord(session.statuses[effect.state]) ?? {};
+  const promotionStandings = voteStandings(session, objectRecord(tally.promotion) ?? tally);
+  const eliminationStandings = voteStandings(session, objectRecord(tally.elimination) ?? {});
+  const promoted = selectVoteLeaders(promotionStandings, effect.promotionSlots);
+  const eliminated = selectVoteLeaders(eliminationStandings, effect.eliminationSlots);
+
+  for (const entry of promoted) {
+    const participant = session.participants.find((candidate) => candidate.id === entry.participantId);
+    if (participant && effect.promotedParticipantState) {
+      participant.statuses[effect.promotedParticipantState] = true;
+    }
+  }
+  for (const entry of eliminated) {
+    const participant = session.participants.find((candidate) => candidate.id === entry.participantId);
+    if (participant && effect.promotedParticipantState) {
+      participant.statuses[effect.promotedParticipantState] = false;
+    }
+    if (participant && effect.eliminatedParticipantState) {
+      participant.statuses[effect.eliminatedParticipantState] = true;
+    }
+  }
+
+  const result = {
+    type: effect.type,
+    state: effect.state,
+    promotionStandings,
+    eliminationStandings,
+    promoted,
+    eliminated,
+    needsFacilitatorTieBreak: [...promoted, ...eliminated].some((entry) => entry.tied),
+    finalizedAt: new Date().toISOString()
+  };
+  session.statuses[effect.resultState] = result;
+  return result;
+}
+
 function marketPurchaseKey(session: Session, resource: string): string {
   return `${session.phaseClock.turn}:${currentPhase(session).id}:${resource}`;
 }
@@ -1509,6 +1589,10 @@ function applyEffect(session: Session, module: GameModule, participant: Particip
 
   if (effect.type === "castVote") {
     return runCastVote(session, module, participant, effect, event);
+  }
+
+  if (effect.type === "finalizeVote") {
+    return runFinalizeVote(session, effect);
   }
 
   if (effect.type === "marketBuy") {

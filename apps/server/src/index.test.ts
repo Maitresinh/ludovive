@@ -390,7 +390,7 @@ test("loads module mechanics and links actions to them", async () => {
   const wolfpackSummary = modules.find((module: JsonObject) => module.id === "wolfpack-lite");
   const kingSummary = modules.find((module: JsonObject) => module.id === "long-live-the-king-lite");
 
-  assert.equal(putschSummary.mechanics, 5);
+  assert.equal(putschSummary.mechanics, 6);
   assert.equal(putschSummary.sessionRoles, 2);
   assert.equal(putschSummary.setup, true);
   assert.equal(wolfpackSummary.mechanics, 3);
@@ -403,9 +403,12 @@ test("loads module mechanics and links actions to them", async () => {
   const copperMarket = putsch.mechanics.find((mechanic: JsonObject) => mechanic.id === "copper-market");
   const sellWeapons = putsch.actions.find((action: JsonObject) => action.id === "sell-weapons");
   const buyCopper = putsch.actions.find((action: JsonObject) => action.id === "buy-copper-from-mine");
+  const finalizeElection = putsch.actions.find((action: JsonObject) => action.id === "finalize-minister-election");
   assert.equal(copperMarket.family, "market-economy");
   assert.equal(buyCopper.effect.type, "marketBuy");
   assert.equal(buyCopper.effect.componentId, "copper-share-card");
+  assert.equal(finalizeElection.effect.type, "finalizeVote");
+  assert.equal(finalizeElection.effect.resultState, "ministerElectionResult");
   assert.equal(directBarter.family, "exchange");
   assert.equal(sellWeapons.mechanicId, "direct-barter");
   assert.deepEqual(putsch.actions.find((action: JsonObject) => action.id === "trade-copper-shares").effect.resources, ["money", "copperShares"]);
@@ -1528,6 +1531,7 @@ test("opens pending live administration records for Putsch council results", asy
 test("runs Putsch minister election votes end to end", async () => {
   const session = await createSession("putsch-lite");
   const code = session.code;
+  const director = await createParticipant(code, "Paquito", "facilitator-capitalist");
   const voter = await createParticipant(code, "James", "kgb-agent");
   const candidate = await createParticipant(code, "Raul", "fun-agent");
   await advancePhase(code);
@@ -1553,6 +1557,21 @@ test("runs Putsch minister election votes end to end", async () => {
   assert.equal(vote.actionResult.effect.leader.participantId, candidate.participant.id);
   assert.equal(vote.dashboard.statuses.ministerElectionTally.promotion[candidate.participant.id], 3);
   assert.equal(vote.dashboard.participants.find((participant: JsonObject) => participant.id === voter.participant.id).resources.voteBallots, 5);
+
+  const finalized = await injectJson("POST", `/sessions/${code}/events`, {
+    type: "action.requested",
+    actionId: "finalize-minister-election",
+    participantId: director.participant.id,
+    payload: {}
+  });
+
+  assert.equal(finalized.accepted, true);
+  assert.equal(finalized.actionResult.effect.type, "finalizeVote");
+  assert.equal(finalized.actionResult.effect.promoted[0].participantId, candidate.participant.id);
+  assert.equal(finalized.actionResult.effect.eliminated[0].participantId, voter.participant.id);
+  assert.equal(finalized.dashboard.statuses.ministerElectionResult.promoted[0].participantId, candidate.participant.id);
+  assert.equal(finalized.dashboard.participants.find((participant: JsonObject) => participant.id === candidate.participant.id).statuses.councilSeat, true);
+  assert.equal(finalized.dashboard.participants.find((participant: JsonObject) => participant.id === voter.participant.id).statuses.councilEliminated, true);
 });
 
 test("runs the stripped Putsch operational demo path", async () => {
