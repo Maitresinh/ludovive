@@ -1050,6 +1050,24 @@ function contestedCoupOutcome(resolution: PendingResolution): string | undefined
   return "tie-facilitator";
 }
 
+function contestCommitmentSummary(resolution: PendingResolution): Record<string, unknown> {
+  const payload = objectRecord(resolution.payload);
+  const commitments = objectRecord(payload?.commitments);
+  const attacker = objectRecord(commitments?.attacker);
+  const defender = objectRecord(commitments?.defender);
+  return {
+    attacker: attacker ? {
+      participantId: attacker.participantId,
+      total: Number(attacker.total ?? 0)
+    } : undefined,
+    defender: defender ? {
+      participantId: defender.participantId,
+      total: Number(defender.total ?? 0)
+    } : undefined,
+    outcome: contestedCoupOutcome(resolution)
+  };
+}
+
 function resolutionEffects(resolution: PendingResolution, input: z.infer<typeof resolveResolutionSchema>): ResolutionEffect[] {
   const declaredEffects = declaredResolutionOutcomes(resolution).find((outcome) => outcome.id === input.outcome)?.effects ?? [];
   const defaultEffects = defaultResolutionEffects(resolution);
@@ -1636,9 +1654,15 @@ function applyContestAction(
       throw new Error("No pending contest requires this participant");
     }
 
+    const pendingPayload = objectRecord(pendingResolution.payload) ?? {};
+    const deadline = objectRecord(pendingPayload.commitmentDeadline);
+    if (typeof deadline?.endsAt === "string" && Date.now() > new Date(deadline.endsAt).getTime()) {
+      throw new Error("Contest commitment deadline has passed");
+    }
+
     const resources = actionExchangeResources(module, action, mechanic, event.payload);
     const resourceChanges = consumeActionResources(module, participant, resources);
-    const payload = objectRecord(pendingResolution.payload) ?? {};
+    const payload = pendingPayload;
     const commitments = objectRecord(payload.commitments) ?? {};
     pendingResolution.payload = {
       ...payload,
@@ -1649,12 +1673,14 @@ function applyContestAction(
     };
 
     const outcome = contestedCoupOutcome(pendingResolution);
+    const contest = contestCommitmentSummary(pendingResolution);
     if (!outcome) {
       return {
         type: "contestCommitmentRecorded",
         resolutionId: pendingResolution.id,
         mechanicId: mechanic.id,
-        resourceChanges
+        resourceChanges,
+        contest
       };
     }
 
@@ -1664,6 +1690,7 @@ function applyContestAction(
       resolutionId: pendingResolution.id,
       mechanicId: mechanic.id,
       outcome,
+      contest,
       resourceChanges,
       resolveResult
     };
@@ -2504,6 +2531,38 @@ function enrichResolution(session: Session, resolution: PendingResolution): Pend
   };
 }
 
+function participantResolutionView(session: Session, resolution: PendingResolution, participant: Participant): ReturnType<typeof enrichResolution> {
+  const enriched = enrichResolution(session, resolution);
+  if (resolution.mechanicId !== "contested-coup") {
+    return enriched;
+  }
+
+  const payload = objectRecord(enriched.payload) ?? {};
+  const commitments = objectRecord(payload.commitments) ?? {};
+  const attacker = objectRecord(commitments.attacker);
+  const defender = objectRecord(commitments.defender);
+  const visibleCommitments: Record<string, unknown> = {};
+  if (attacker?.participantId === participant.id) {
+    visibleCommitments.attacker = attacker;
+  }
+  if (defender?.participantId === participant.id) {
+    visibleCommitments.defender = defender;
+  }
+
+  return {
+    ...enriched,
+    payload: {
+      ...payload,
+      commitments: Object.keys(visibleCommitments).length > 0 ? visibleCommitments : undefined,
+      commitmentStatus: {
+        attacker: attacker ? "recorded" : "waiting",
+        defender: defender ? "recorded" : "waiting",
+        viewerCanRespond: payload.defenderId === participant.id && !defender
+      }
+    }
+  };
+}
+
 function dashboardReadModel(session: Session): ReturnType<typeof visibleSession> & { readModel: "dashboard"; aggregates: Record<string, unknown>; scores: Record<string, unknown>[] } {
   return {
     ...visibleSession(session),
@@ -2555,7 +2614,7 @@ function participantReadModel(session: Session, participantId: string): Record<s
     participant,
     ownRole,
     availableActions: actionAvailability(session, participant).filter((action) => action.available),
-    pendingResolutions: visiblePendingResolutions.map((resolution) => enrichResolution(session, resolution)),
+    pendingResolutions: visiblePendingResolutions.map((resolution) => participantResolutionView(session, resolution, participant)),
     exchanges: session.exchanges.filter((exchange) => exchange.fromParticipantId === participant.id || exchange.toParticipantId === participant.id),
     messages: visibleMessagesForParticipant(session, participant.id),
     visibleParticipants: session.participants.map((candidate) => ({

@@ -15,7 +15,7 @@ But: transformer Putsch de module de demonstration en jeu pilote complet, tout e
 | Phases/tours | Solide | `market`, `intrigue`, `coup`, `resolution`, `first-council` + `turnPhase` | `turn-phase` |
 | Actions joueur | Partiel | echanges, coup, defense, vote, detournement | `action-events` |
 | Echanges | Solide pour MVP | transferts immediats, proximite/fallback, audit | `exchange` |
-| Coup d'Etat | Partiel avance | engagements caches et effets de cours existent, mais pouvoir final et cas limites restent incomplets | `sealed-contest` |
+| Coup d'Etat | Partiel avance | engagements caches proteges cote joueur, deadline serveur, effets de cours; pouvoir final et cas limites restent incomplets | `sealed-contest` |
 | Conseil | Partiel | saisie/record et resolution guidee existent | `collective-phase` |
 | Election | Partiel | vote/tally existe, cloture et college a finaliser | `vote-engine` |
 | Mine de cuivre | Partiel | cours et compteurs existent, ventes horaires non strictes | `market-economy` |

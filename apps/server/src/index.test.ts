@@ -1434,9 +1434,57 @@ test("uses facilitator-configured coup countdown for hidden commitments", async 
   });
 
   assert.equal(coup.dashboard.pendingResolutions[0].payload.commitmentDeadline.durationSeconds, 45);
+  assert.equal(coup.dashboard.pendingResolutions[0].payload.commitments.attacker.total, 2);
+  const attackerModel = await injectJson("GET", `/sessions/${code}/read-models/participant/${attacker.participant.id}`);
+  assert.equal(attackerModel.pendingResolutions[0].payload.commitments.attacker.total, 2);
+  assert.equal(attackerModel.pendingResolutions[0].payload.commitmentStatus.defender, "waiting");
   const defenderModel = await injectJson("GET", `/sessions/${code}/read-models/participant/${defender.participant.id}`);
   assert.equal(defenderModel.pendingResolutions[0].payload.commitmentDeadline.durationSeconds, 45);
+  assert.equal(defenderModel.pendingResolutions[0].payload.commitments, undefined);
+  assert.equal(defenderModel.pendingResolutions[0].payload.commitmentStatus.attacker, "recorded");
+  assert.equal(defenderModel.pendingResolutions[0].payload.commitmentStatus.viewerCanRespond, true);
   assert.equal(defenderModel.availableActions.some((action: JsonObject) => action.id === "defend-coup"), true);
+});
+
+test("rejects Putsch defense commitments after the countdown deadline", async () => {
+  const session = await createSession("putsch-lite");
+  const code = session.code;
+  const director = await createParticipant(code, "Paquito", "facilitator-capitalist");
+  const attacker = await createParticipant(code, "General", "general");
+  const defender = await createParticipant(code, "Marchand", "dealer");
+  await injectJson("POST", `/sessions/${code}/session-roles/game-authority`, {
+    participantId: director.participant.id
+  });
+  await injectJson("POST", `/sessions/${code}/state`, {
+    state: "coupCommitmentSeconds",
+    value: 1
+  });
+  await advancePhase(code);
+  await advancePhase(code);
+  await injectJson("POST", `/sessions/${code}/events`, {
+    type: "action.requested",
+    actionId: "attempt-coup",
+    participantId: attacker.participant.id,
+    payload: {
+      defenderId: defender.participant.id,
+      leaderIds: [attacker.participant.id, defender.participant.id],
+      resources: { weapons: 1, ammo: 1 }
+    }
+  });
+  await new Promise((resolve) => setTimeout(resolve, 1100));
+
+  const lateDefense = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/events`,
+    payload: {
+      type: "action.requested",
+      actionId: "defend-coup",
+      participantId: defender.participant.id,
+      payload: { resources: { ammo: 1 } }
+    }
+  });
+  assert.equal(lateDefense.statusCode, 400);
+  assert.match(lateDefense.json<JsonObject>().error, /deadline has passed/);
 });
 
 test("opens pending live administration records for Putsch council results", async () => {
@@ -1552,6 +1600,8 @@ test("runs the stripped Putsch operational demo path", async () => {
   });
   assert.equal(resolvedCoup.actionResult.effect.type, "autoResolvedContest");
   assert.equal(resolvedCoup.actionResult.effect.outcome, "attacker-wins");
+  assert.equal(resolvedCoup.actionResult.effect.contest.attacker.total, 2);
+  assert.equal(resolvedCoup.actionResult.effect.contest.defender.total, 1);
   assert.equal(resolvedCoup.dashboard.statuses.copperPrice, 500);
   assert.equal(resolvedCoup.dashboard.statuses.firstCouncilDue, true);
 
