@@ -243,6 +243,35 @@ type TurnPhaseView = {
   facilitatorControlled: boolean;
 };
 
+type PhasePlanAction = {
+  id: string;
+  name: string;
+  actor: string;
+  target: string;
+  mechanicId?: string;
+  mechanicFamily?: string;
+  mode: "control" | "resolution";
+  gesture?: string;
+  gestureLabel?: string;
+  available?: boolean;
+  blockedBy?: string[];
+};
+
+type PhasePlanView = {
+  phaseId: string;
+  phaseName: string;
+  turn: number;
+  actions: PhasePlanAction[];
+  playableActionCount: number;
+  pendingResolutionCount: number;
+  nextPhase: {
+    id: string;
+    name: string;
+    index: number;
+    startsNextTurn: boolean;
+  };
+};
+
 type Exchange = {
   id: string;
   fromParticipantId: string;
@@ -1840,6 +1869,68 @@ function actionAvailability(session: Session, participant: Participant): ActionA
   });
 }
 
+function currentPhaseActions(module: GameModule, session: Session): GameModule["actions"] {
+  const phaseId = currentPhase(session).id;
+  return module.actions.filter((action) => action.phase === "*" || action.phase === phaseId);
+}
+
+function mechanicResolutionModes(mechanic: GameModule["mechanics"][number] | undefined): string[] {
+  const resolution = objectRecord(mechanic?.resolution);
+  if (Array.isArray(resolution?.modes)) {
+    return resolution.modes.map(String);
+  }
+  return typeof resolution?.mode === "string" ? [resolution.mode] : [];
+}
+
+function phasePlanActionMode(mechanic: GameModule["mechanics"][number] | undefined): PhasePlanAction["mode"] {
+  const modes = mechanicResolutionModes(mechanic);
+  return mechanic?.family === "live-administration" || modes.includes("liveThenRecord") || modes.includes("guidedInApp")
+    ? "resolution"
+    : "control";
+}
+
+function phasePlanView(session: Session, participant?: Participant): PhasePlanView {
+  const module = getModuleOrThrow(session.moduleId);
+  const phase = currentPhase(session);
+  const nextPhaseIndex = (session.phaseIndex + 1) % module.phases.length;
+  const nextPhase = module.phases[nextPhaseIndex];
+  const availability = participant
+    ? new Map(actionAvailability(session, participant).map((action) => [action.id, action]))
+    : undefined;
+  const actions = currentPhaseActions(module, session).map((action) => {
+    const mechanic = module.mechanics.find((candidate) => candidate.id === action.mechanicId);
+    const participantAction = availability?.get(action.id);
+    return {
+      id: action.id,
+      name: action.name,
+      actor: action.actor,
+      target: action.target,
+      mechanicId: action.mechanicId,
+      mechanicFamily: mechanic?.family,
+      mode: phasePlanActionMode(mechanic),
+      gesture: action.gesture,
+      gestureLabel: action.gesture ? knownGestureLabel(action.gesture) : undefined,
+      available: participantAction?.available,
+      blockedBy: participantAction?.blockedBy
+    };
+  });
+
+  return {
+    phaseId: phase.id,
+    phaseName: phase.name,
+    turn: session.phaseClock.turn,
+    actions,
+    playableActionCount: availability ? actions.filter((action) => action.available).length : actions.length,
+    pendingResolutionCount: session.pendingResolutions.length,
+    nextPhase: {
+      id: nextPhase.id,
+      name: nextPhase.name,
+      index: nextPhaseIndex,
+      startsNextTurn: nextPhaseIndex === 0
+    }
+  };
+}
+
 function minimalReadModel(session: Session): Record<string, unknown> {
   const module = getModuleOrThrow(session.moduleId);
   return {
@@ -1863,6 +1954,7 @@ function minimalReadModel(session: Session): Record<string, unknown> {
     phase: currentPhase(session),
     phaseClock: session.phaseClock,
     turnPhase: turnPhaseView(session),
+    phasePlan: phasePlanView(session),
     devices: session.devices.map((device) => ({
       id: device.id,
       name: device.name,
@@ -2047,11 +2139,12 @@ function aggregateSession(session: Session): Record<string, unknown> {
   };
 }
 
-function visibleSession(session: Session): Session & { module: GameModule; phase: z.infer<typeof phaseSchema>; turnPhase: TurnPhaseView } {
+function visibleSession(session: Session): Session & { module: GameModule; phase: z.infer<typeof phaseSchema>; turnPhase: TurnPhaseView; phasePlan: PhasePlanView } {
   return {
     ...session,
     phase: currentPhase(session),
     turnPhase: turnPhaseView(session),
+    phasePlan: phasePlanView(session),
     module: getModuleOrThrow(session.moduleId)
   };
 }
@@ -2269,6 +2362,7 @@ function participantReadModel(session: Session, participantId: string): Record<s
     phase: currentPhase(session),
     phaseClock: session.phaseClock,
     turnPhase: turnPhaseView(session),
+    phasePlan: phasePlanView(session, participant),
     tableStatuses: session.statuses,
     participant,
     ownRole,
@@ -2676,6 +2770,14 @@ function renderIndex(): string {
       const steps = Array.from({ length: turnPhase.phase.total }, (_, index) => '<span class="phaseStep' + (index === turnPhase.phase.index ? " active" : "") + '"></span>').join("");
       return '<div class="item turnPhase"><div class="turnPhaseHeader"><span class="pill">Tour ' + turnPhase.turn + '</span><span class="pill">Phase ' + (turnPhase.phase.index + 1) + '/' + turnPhase.phase.total + '</span></div><div class="turnPhaseName">' + turnPhase.phase.name + '</div><div class="phaseTrack" style="--phase-total:' + turnPhase.phase.total + '">' + steps + '</div><div class="muted">' + formatTurnPhase(turnPhase, session.phaseClock) + '</div></div>';
     }
+    function renderPhasePlanSummary(session) {
+      const plan = session.phasePlan;
+      if (!plan) return "";
+      const controls = plan.actions.filter((action) => action.mode === "control").length;
+      const resolutions = plan.actions.filter((action) => action.mode === "resolution").length;
+      const next = plan.nextPhase.startsNextTurn ? "Tour suivant: " : "Puis: ";
+      return '<div class="item"><strong>Plan de phase</strong><div>' + plan.playableActionCount + ' action(s), ' + controls + ' controle(s), ' + resolutions + ' resolution(s)</div><div class="muted">' + plan.pendingResolutionCount + ' resolution(s) en attente</div><div class="muted">' + next + plan.nextPhase.name + '</div></div>';
+    }
     function formatStatusValue(value) {
       if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
       return JSON.stringify(value);
@@ -2795,6 +2897,7 @@ function renderIndex(): string {
           : "Avancer la phase ou envoyer une consigne";
       return [
         renderTurnPhase(session),
+        renderPhasePlanSummary(session),
         '<div class="item"><strong>Table</strong><div>' + session.participants.length + ' participant(s), ' + connectedCount + '/' + session.devices.length + ' appareil(s) connecte(s)</div><div class="muted">' + renderStatusList(session.statuses) + '</div></div>',
         '<div class="item"><strong>A faire</strong><div>' + nextStep + '</div></div>'
       ].join("");
@@ -3404,6 +3507,12 @@ function renderParticipantApp(): string {
       const steps = Array.from({ length: turnPhase.phase.total }, (_, index) => '<span class="phaseStep' + (index === turnPhase.phase.index ? " active" : "") + '"></span>').join("");
       return '<div class="item turnPhase"><div class="turnPhaseHeader"><span class="pill">Tour ' + turnPhase.turn + '</span><span class="pill">Phase ' + (turnPhase.phase.index + 1) + '/' + turnPhase.phase.total + '</span></div><div class="turnPhaseName">' + turnPhase.phase.name + '</div><div class="phaseTrack" style="--phase-total:' + turnPhase.phase.total + '">' + steps + '</div><div class="muted">' + formatTurnPhase(turnPhase, model.phaseClock) + '</div></div>';
     }
+    function renderPhasePlanSummary(model) {
+      const plan = model.phasePlan;
+      if (!plan) return "";
+      const next = plan.nextPhase.startsNextTurn ? "Tour suivant: " : "Puis: ";
+      return '<div class="item"><strong>Plan de phase</strong><div>' + plan.playableActionCount + ' action(s) possible(s)</div><div class="muted">' + plan.pendingResolutionCount + ' resolution(s) en attente</div><div class="muted">' + next + plan.nextPhase.name + '</div></div>';
+    }
     function formatDeadline(deadline) {
       if (!deadline?.endsAt) return "temps libre";
       const remaining = Math.max(0, Math.ceil((new Date(deadline.endsAt).getTime() - Date.now()) / 1000));
@@ -3547,6 +3656,7 @@ function renderParticipantApp(): string {
         renderStatusPills(model.tableStatuses)
       ].join(" ");
       byId("phaseClock").innerHTML = renderTurnPhase(model);
+      byId("phaseClock").innerHTML += renderPhasePlanSummary(model);
       byId("roleDetails").innerHTML = renderRoleDetails(model);
       byId("resources").innerHTML = Object.entries(model.participant.resources || {}).map(([key, value]) => '<div class="item"><strong>' + resourceLabel(model, key) + '</strong><div>' + value + '</div></div>').join("") || '<div class="muted">Aucune ressource</div>';
       byId("statuses").innerHTML = renderStatuses(model.participant.statuses);

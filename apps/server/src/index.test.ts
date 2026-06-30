@@ -147,6 +147,8 @@ test("serves a one-page Putsch core demo dashboard", async () => {
   assert.match(response.body, /renderMvpPanel/);
   assert.match(response.body, /renderTurnPhase/);
   assert.match(response.body, /formatTurnPhase/);
+  assert.match(response.body, /renderPhasePlanSummary/);
+  assert.match(response.body, /Plan de phase/);
   assert.match(response.body, /phaseTrack/);
   assert.match(response.body, /themePanel/);
   assert.match(response.body, /renderThemePanel/);
@@ -209,6 +211,8 @@ test("serves a mobile participant app for session join", async () => {
   assert.match(response.body, /themeStrip/);
   assert.match(response.body, /renderTurnPhase/);
   assert.match(response.body, /formatTurnPhase/);
+  assert.match(response.body, /renderPhasePlanSummary/);
+  assert.match(response.body, /Plan de phase/);
   assert.match(response.body, /phaseTrack/);
   assert.match(response.body, /Geste/);
   assert.match(response.body, /id="statuses"/);
@@ -459,6 +463,14 @@ test("returns a dashboard read model with the complete live state", async () => 
   assert.equal(dashboard.turnPhase.phase.index, 0);
   assert.equal(dashboard.turnPhase.phase.total, dashboard.module.phases.length);
   assert.equal(dashboard.turnPhase.durationSeconds, dashboard.phaseClock.phaseDurationSeconds);
+  assert.equal(dashboard.phasePlan.phaseId, "market");
+  assert.equal(dashboard.phasePlan.actions.length, 3);
+  assert.deepEqual(
+    dashboard.phasePlan.actions.map((action: JsonObject) => action.id),
+    ["sell-weapons", "trade-copper-shares", "trade-arms-caches"]
+  );
+  assert.equal(dashboard.phasePlan.nextPhase.id, "intrigue");
+  assert.equal(dashboard.phasePlan.pendingResolutionCount, 0);
   assert.equal(dashboard.aggregates.participants.total, 2);
   assert.equal(dashboard.aggregates.participants.byRole.general, 1);
   assert.equal(dashboard.aggregates.resources.money.total, 20);
@@ -535,6 +547,9 @@ test("returns device sync package with filtered read model and audit catch-up", 
   assert.equal(boundSync.readModel.turnPhase.turn, 1);
   assert.equal(boundSync.readModel.turnPhase.phase.id, "briefing");
   assert.equal(boundSync.readModel.turnPhase.phase.index, 0);
+  assert.equal(boundSync.readModel.phasePlan.phaseId, "briefing");
+  assert.equal(boundSync.readModel.phasePlan.playableActionCount, 0);
+  assert.equal(boundSync.readModel.phasePlan.nextPhase.id, "silent-running");
   assert.equal(boundSync.audit.latestSequence, 5);
   assert.deepEqual(
     boundSync.audit.entries.map((entry: JsonObject) => entry.sequence),
@@ -545,6 +560,8 @@ test("returns device sync package with filtered read model and audit catch-up", 
   assert.equal(unboundSync.readModel.readModel, "device.unbound");
   assert.equal(unboundSync.readModel.turnPhase.phase.id, "briefing");
   assert.equal(unboundSync.readModel.turnPhase.phase.total, 5);
+  assert.equal(unboundSync.readModel.phasePlan.actions.length, 1);
+  assert.equal(unboundSync.readModel.phasePlan.nextPhase.id, "silent-running");
   assert.deepEqual(unboundSync.audit.entries, []);
 });
 
