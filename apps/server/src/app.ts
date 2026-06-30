@@ -2412,6 +2412,12 @@ function renderIndex(): string {
     .item { border: 1px solid #2f353c; border-radius: 8px; padding: 10px; background: #111417; }
     .item strong { display: block; margin-bottom: 4px; }
     .themeBanner { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, var(--panel)), var(--panel)); }
+    .turnPhase { display: grid; gap: 6px; border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+    .turnPhaseHeader { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+    .turnPhaseName { font-size: 18px; font-weight: 700; }
+    .phaseTrack { display: grid; grid-template-columns: repeat(var(--phase-total, 1), minmax(0, 1fr)); gap: 4px; }
+    .phaseStep { height: 7px; border-radius: 999px; background: #30363d; }
+    .phaseStep.active { background: var(--accent); }
     .gestureCue { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); border-radius: 999px; margin-top: 8px; color: var(--ink); background: color-mix(in srgb, var(--accent) 15%, transparent); font-size: 12px; }
     .fallbackCue { color: var(--muted); font-size: 12px; margin-top: 4px; }
     .action-contest { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
@@ -2656,6 +2662,20 @@ function renderIndex(): string {
       const theme = session.module.uiTheme || {};
       return '<div class="item themeBanner"><strong>' + (theme.icons?.game || "") + ' Template ' + (theme.template || "tabletop") + '</strong><div>' + (theme.tone || "Style de table") + '</div><div class="muted">Couleurs, icones et libelles viennent du module importe.</div></div>';
     }
+    function formatTurnPhase(turnPhase, fallbackClock) {
+      if (!turnPhase) return formatClock(fallbackClock);
+      const end = turnPhase.endsAt ? new Date(turnPhase.endsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "fin libre";
+      const duration = turnPhase.durationSeconds ? turnPhase.durationSeconds + "s" : "sans duree";
+      return "Tour " + turnPhase.turn + " - Phase " + (turnPhase.phase.index + 1) + "/" + turnPhase.phase.total + " - " + duration + " - fin " + end;
+    }
+    function renderTurnPhase(session) {
+      const turnPhase = session.turnPhase;
+      if (!turnPhase) {
+        return '<div class="item turnPhase"><strong>' + session.module.name + '</strong><div>Phase: ' + session.phase.name + '</div><div class="muted">' + formatClock(session.phaseClock) + '</div></div>';
+      }
+      const steps = Array.from({ length: turnPhase.phase.total }, (_, index) => '<span class="phaseStep' + (index === turnPhase.phase.index ? " active" : "") + '"></span>').join("");
+      return '<div class="item turnPhase"><div class="turnPhaseHeader"><span class="pill">Tour ' + turnPhase.turn + '</span><span class="pill">Phase ' + (turnPhase.phase.index + 1) + '/' + turnPhase.phase.total + '</span></div><div class="turnPhaseName">' + turnPhase.phase.name + '</div><div class="phaseTrack" style="--phase-total:' + turnPhase.phase.total + '">' + steps + '</div><div class="muted">' + formatTurnPhase(turnPhase, session.phaseClock) + '</div></div>';
+    }
     function formatStatusValue(value) {
       if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
       return JSON.stringify(value);
@@ -2774,7 +2794,7 @@ function renderIndex(): string {
           ? "Phase active: " + currentActions.map((action) => action.name).join(" / ")
           : "Avancer la phase ou envoyer une consigne";
       return [
-        '<div class="item"><strong>' + session.module.name + '</strong><div>Phase: ' + session.phase.name + '</div><div class="muted">' + formatClock(session.phaseClock) + '</div></div>',
+        renderTurnPhase(session),
         '<div class="item"><strong>Table</strong><div>' + session.participants.length + ' participant(s), ' + connectedCount + '/' + session.devices.length + ' appareil(s) connecte(s)</div><div class="muted">' + renderStatusList(session.statuses) + '</div></div>',
         '<div class="item"><strong>A faire</strong><div>' + nextStep + '</div></div>'
       ].join("");
@@ -2928,8 +2948,7 @@ function renderIndex(): string {
       byId("summary").innerHTML = [
         '<span class="pill">Code ' + session.code + '</span>',
         '<span class="pill">' + session.module.name + '</span>',
-        '<span class="pill">Phase ' + session.phase.name + '</span>',
-        '<span class="pill">' + formatClock(session.phaseClock) + '</span>',
+        '<span class="pill">' + formatTurnPhase(session.turnPhase, session.phaseClock) + '</span>',
         '<span class="pill">' + session.devices.length + ' appareil(s)</span>',
         '<span class="pill">' + session.participants.length + ' participant(s)</span>',
         Object.keys(session.statuses || {}).length ? renderStatusList(session.statuses) : ""
@@ -3197,6 +3216,12 @@ function renderParticipantApp(): string {
     .resourcePushControls { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
     .resourcePushControls button { min-height: 38px; margin: 0; padding: 7px; }
     .resourcePushTile input { position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; }
+    .turnPhase { display: grid; gap: 6px; }
+    .turnPhaseHeader { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+    .turnPhaseName { font-size: 18px; font-weight: 700; color: var(--ink); }
+    .phaseTrack { display: grid; grid-template-columns: repeat(var(--phase-total, 1), minmax(0, 1fr)); gap: 4px; }
+    .phaseStep { height: 7px; border-radius: 999px; background: #30363d; }
+    .phaseStep.active { background: var(--accent); }
     @media (max-width: 380px) { .resourcePushGrid { grid-template-columns: 1fr; } }
     .error { color: #ffb1a8; min-height: 20px; }
     .hidden { display: none; }
@@ -3225,7 +3250,7 @@ function renderParticipantApp(): string {
       <h2 id="participantTitle">Participant</h2>
       <div id="themeStrip" class="stack"></div>
       <div id="summary"></div>
-      <div id="phaseClock" class="muted"></div>
+      <div id="phaseClock" class="stack"></div>
       <h3>Role</h3>
       <div id="roleDetails" class="stack"></div>
       <h3>Ressources</h3>
@@ -3367,6 +3392,18 @@ function renderParticipantApp(): string {
       const end = clock.phaseEndsAt ? new Date(clock.phaseEndsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "fin libre";
       return "Tour " + clock.turn + " - " + (clock.phaseDurationSeconds || "sans duree") + "s - fin " + end;
     }
+    function formatTurnPhase(turnPhase, fallbackClock) {
+      if (!turnPhase) return formatClock(fallbackClock);
+      const end = turnPhase.endsAt ? new Date(turnPhase.endsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "fin libre";
+      const duration = turnPhase.durationSeconds ? turnPhase.durationSeconds + "s" : "sans duree";
+      return "Tour " + turnPhase.turn + " - Phase " + (turnPhase.phase.index + 1) + "/" + turnPhase.phase.total + " - " + duration + " - fin " + end;
+    }
+    function renderTurnPhase(model) {
+      const turnPhase = model.turnPhase;
+      if (!turnPhase) return '<div class="item turnPhase"><strong>Phase ' + model.phase.name + '</strong><div class="muted">' + formatClock(model.phaseClock) + '</div></div>';
+      const steps = Array.from({ length: turnPhase.phase.total }, (_, index) => '<span class="phaseStep' + (index === turnPhase.phase.index ? " active" : "") + '"></span>').join("");
+      return '<div class="item turnPhase"><div class="turnPhaseHeader"><span class="pill">Tour ' + turnPhase.turn + '</span><span class="pill">Phase ' + (turnPhase.phase.index + 1) + '/' + turnPhase.phase.total + '</span></div><div class="turnPhaseName">' + turnPhase.phase.name + '</div><div class="phaseTrack" style="--phase-total:' + turnPhase.phase.total + '">' + steps + '</div><div class="muted">' + formatTurnPhase(turnPhase, model.phaseClock) + '</div></div>';
+    }
     function formatDeadline(deadline) {
       if (!deadline?.endsAt) return "temps libre";
       const remaining = Math.max(0, Math.ceil((new Date(deadline.endsAt).getTime() - Date.now()) / 1000));
@@ -3505,11 +3542,11 @@ function renderParticipantApp(): string {
       byId("themeStrip").innerHTML = renderThemeStrip(model);
       byId("summary").innerHTML = [
         '<span class="pill">' + model.module.name + '</span>',
-        '<span class="pill">Phase ' + model.phase.name + '</span>',
+        '<span class="pill">' + formatTurnPhase(model.turnPhase, model.phaseClock) + '</span>',
         '<span class="pill">' + roleLabel(model, model.participant.roleId) + '</span>',
         renderStatusPills(model.tableStatuses)
       ].join(" ");
-      byId("phaseClock").textContent = formatClock(model.phaseClock);
+      byId("phaseClock").innerHTML = renderTurnPhase(model);
       byId("roleDetails").innerHTML = renderRoleDetails(model);
       byId("resources").innerHTML = Object.entries(model.participant.resources || {}).map(([key, value]) => '<div class="item"><strong>' + resourceLabel(model, key) + '</strong><div>' + value + '</div></div>').join("") || '<div class="muted">Aucune ressource</div>';
       byId("statuses").innerHTML = renderStatuses(model.participant.statuses);
