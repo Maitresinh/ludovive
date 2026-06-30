@@ -154,6 +154,17 @@ const uiThemeSchema = z.object({
   }).default({})
 }).default({ template: "tabletop", colors: {}, icons: {}, interactionLabels: {} });
 
+const soundCueSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  channel: z.enum(["ambient", "event", "alert", "stinger"]).default("event"),
+  event: z.string().min(1).optional(),
+  phase: z.string().min(1).optional(),
+  tone: z.string().optional(),
+  url: z.string().optional(),
+  visibility: z.enum(["dashboard", "participants", "all"]).default("all")
+});
+
 const moduleSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -162,6 +173,7 @@ const moduleSchema = z.object({
   inspirationNotes: z.string().optional(),
   timeline: z.unknown().optional(),
   uiTheme: uiThemeSchema,
+  soundboard: z.array(soundCueSchema).default([]),
   state: z.record(z.unknown()).default({}),
   players: z.object({
     min: z.number().int().positive(),
@@ -2679,6 +2691,7 @@ function participantReadModel(session: Session, participantId: string): Record<s
       id: module.id,
       name: module.name,
       uiTheme: module.uiTheme,
+      soundboard: module.soundboard.filter((cue) => cue.visibility === "participants" || cue.visibility === "all"),
       resources: module.resources.map((resource) => ({
         id: resource.id,
         name: resource.name,
@@ -3091,7 +3104,8 @@ function renderIndex(): string {
     }
     function renderThemePanel(session) {
       const theme = session.module.uiTheme || {};
-      return '<div class="item themeBanner"><strong>' + (theme.icons?.game || "") + ' Template ' + (theme.template || "tabletop") + '</strong><div>' + (theme.tone || "Style de table") + '</div><div class="muted">Couleurs, icones et libelles viennent du module importe.</div></div>';
+      const cues = (session.module.soundboard || []).map((cue) => '<div class="muted">' + cue.name + ' - ' + cue.channel + (cue.phase ? ' / phase ' + cue.phase : '') + (cue.event ? ' / ' + cue.event : '') + '</div>').join("");
+      return '<div class="item themeBanner"><strong>' + (theme.icons?.game || "") + ' Template ' + (theme.template || "tabletop") + '</strong><div>' + (theme.tone || "Style de table") + '</div><div class="muted">Couleurs, icones et libelles viennent du module importe.</div>' + cues + '</div>';
     }
     function formatTurnPhase(turnPhase, fallbackClock) {
       if (!turnPhase) return formatClock(fallbackClock);

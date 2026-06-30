@@ -284,6 +284,7 @@ test("lets a participant join with a chosen role and receive a filtered read mod
   assert.equal(joined.readModel.participant.id, joined.participant.id);
   assert.equal(joined.readModel.visibleParticipants.length, 1);
   assert.equal(joined.readModel.module.resources.find((resource: JsonObject) => resource.id === "money").name, "Escudos");
+  assert.equal(joined.readModel.module.soundboard.some((cue: JsonObject) => cue.id === "coup-declared"), true);
   assert.equal(joined.readModel.module.roles.find((role: JsonObject) => role.id === "general").name, "General");
   assert.equal(joined.readModel.module.roles.find((role: JsonObject) => role.id === "facilitator-capitalist").secretRole, undefined);
   assert.equal(joined.readModel.module.sessionRoles, undefined);
@@ -426,6 +427,8 @@ test("loads module mechanics and links actions to them", async () => {
   assert.equal(putsch.actions.find((action: JsonObject) => action.id === "defend-coup").effect.type, "contestResponse");
   assert.equal(putsch.actions.find((action: JsonObject) => action.id === "vote-minister-council").effect.type, "castVote");
   assert.equal(putsch.uiTheme.template, "political-pulp");
+  assert.equal(putsch.soundboard.length, 5);
+  assert.equal(putsch.soundboard.find((cue: JsonObject) => cue.id === "coup-declared").channel, "alert");
   assert.equal(putsch.actions.find((action: JsonObject) => action.id === "sell-weapons").gesture, "pour-liquid");
   assert.equal(putsch.actions.find((action: JsonObject) => action.id === "sell-drugs").gesture, "palm-cover");
   assert.equal(putsch.components.find((component: JsonObject) => component.id === "vote-ballot").count, 80);

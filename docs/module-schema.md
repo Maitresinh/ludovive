@@ -14,6 +14,17 @@ This is the first conceptual schema for importable Ludovive modules.
     "convergencePhaseId": "audience",
     "decisionPhaseId": "council"
   },
+  "soundboard": [
+    {
+      "id": "coup-declared",
+      "name": "Coup declared",
+      "channel": "alert",
+      "event": "contestedBid",
+      "phase": "coup",
+      "tone": "short siren and distant crowd",
+      "visibility": "all"
+    }
+  ],
   "players": {
     "min": 3,
     "max": 12
@@ -172,6 +183,19 @@ It can declare:
 - `interactionLabels`: wording for primary gestures and fallback controls.
 
 Buttons remain available as fallback, but player-facing controls should first present the physical gesture declared by the action whenever possible.
+
+## Soundboard
+
+`soundboard` declares reusable audio cues without forcing the module to ship final audio files on day one.
+
+- `channel`: `ambient`, `event`, `alert`, or `stinger`;
+- `event`: optional event/action/effect hook;
+- `phase`: optional phase where the cue is relevant;
+- `tone`: audio direction for generated or curated sounds;
+- `url`: optional asset URL when a real sound file exists;
+- `visibility`: `dashboard`, `participants`, or `all`.
+
+Dashboard read models expose the full list. Participant read models receive cues marked `participants` or `all`.
 
 ## Session Roles
 

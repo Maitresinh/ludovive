@@ -20,7 +20,7 @@ But: transformer Putsch de module de demonstration en jeu pilote complet, tout e
 | Election | Partiel solide | vote/tally + cloture declarative, statuts de college; departages fins MJ a enrichir | `vote-engine` |
 | Mine de cuivre | Partiel | cours et compteurs existent, ventes horaires non strictes | `market-economy` |
 | Score | Partiel solide | calcul estime declaratif par ressource, actions cuivre au cours courant, multiplicateur Paquito | `score-engine` |
-| Sons | Manquant | aucun schema son/module audio | `event-soundboard` |
+| Sons | En place minimal | soundboard declarative avec cues Putsch, fichiers audio definitifs a produire | `event-soundboard` |
 | Dashboard specialise | Partiel | dashboard general + phase plan + scores, pas encore panneau mine/personnages dedie | `dashboard-panels` |
 
 ## Personnages

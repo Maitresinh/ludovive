@@ -36,6 +36,13 @@
       "fallback": "Secours tactile"
     }
   },
+  "soundboard": [
+    { "id": "market-open", "name": "Ouverture du marche", "channel": "ambient", "phase": "market", "tone": "radio trop chaude et salle enfumee", "visibility": "all" },
+    { "id": "trade-confirmed", "name": "Transaction confirmee", "channel": "event", "event": "exchange.created", "tone": "tampon administratif sec", "visibility": "participants" },
+    { "id": "coup-declared", "name": "Coup d'Etat declare", "channel": "alert", "event": "contestedBid", "phase": "coup", "tone": "sirene courte et foule au loin", "visibility": "all" },
+    { "id": "council-opens", "name": "Conseil des ministres", "channel": "stinger", "phase": "first-council", "tone": "marteau de seance et murmures", "visibility": "all" },
+    { "id": "ballot-drop", "name": "Bulletins depouilles", "channel": "event", "event": "finalizeVote", "phase": "first-council", "tone": "urne, papier, flash d'appareil photo", "visibility": "all" }
+  ],
   "state": {
     "copperPrice": 1000,
     "firstCouncilDue": false,
