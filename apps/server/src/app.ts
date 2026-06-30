@@ -1155,6 +1155,15 @@ function runSetupDistribution(session: Session): Record<string, unknown> {
   if (!setup) {
     return { applied: false, reason: "No setup declared", distributions: [] };
   }
+  if (session.statuses.setupDistributedAt) {
+    return {
+      applied: false,
+      reason: "Setup already distributed",
+      phaseId: setup.phaseId,
+      distributedAt: session.statuses.setupDistributedAt,
+      distributions: []
+    };
+  }
 
   const appliedDistributions = setup.distributions.map((distribution) => {
     const component = module.components.find((candidate) => candidate.id === distribution.componentId);
@@ -1196,9 +1205,12 @@ function runSetupDistribution(session: Session): Record<string, unknown> {
     };
   });
 
+  const distributedAt = new Date().toISOString();
+  session.statuses.setupDistributedAt = distributedAt;
   return {
     applied: true,
     phaseId: setup.phaseId,
+    distributedAt,
     distributions: appliedDistributions
   };
 }
@@ -2463,6 +2475,8 @@ function createPutschDemoSession(): Session {
   for (const player of players) {
     addDemoParticipant(session, module, player);
   }
+  const setupResult = runSetupDistribution(session);
+  audit(session, "setup.distributed", setupResult);
   const message = createSessionMessage(session, { target: "allParticipants", channel: "demo", text: "Le marche ouvre." });
   audit(session, "message.sent", { message });
   return session;

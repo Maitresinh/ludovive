@@ -251,14 +251,19 @@ test("creates a ready-to-play Putsch demo session", async () => {
   assert.equal(demo.devices.length, 5);
   assert.equal(demo.devices.every((device: JsonObject) => Boolean(device.participantId)), true);
   assert.equal(paquito.roleId, "facilitator-capitalist");
+  assert.equal(paquito.inventory["copper-share-card"], 50);
   assert.equal(demo.sessionRoleAssignments["game-authority"].participantId, paquito.id);
   assert.equal(demo.messages[0].text, "Le marche ouvre.");
+  assert.equal(demo.statuses.setupDistributedAt !== undefined, true);
+  assert.equal(demo.componentPools["copper-share-card"].remaining, 0);
+  assert.equal(demo.aggregates.inventory["vote-ballot"], 32);
 
   const paquitoDevice = demo.devices.find((device: JsonObject) => device.participantId === paquito.id);
   const readModel = await injectJson("GET", `/sessions/${demo.code}/read-models/device/${paquitoDevice.id}`);
   assert.equal(readModel.readModel, "device.participant");
   assert.equal(readModel.participant.id, paquito.id);
   assert.equal(readModel.availableActions.some((action: JsonObject) => action.id === "trade-copper-shares"), true);
+  assert.equal(readModel.participant.inventory["copper-share-card"], 50);
 });
 
 test("lets a participant join with a chosen role and receive a filtered read model", async () => {
@@ -387,6 +392,7 @@ test("loads module mechanics and links actions to them", async () => {
 
   assert.equal(putschSummary.mechanics, 4);
   assert.equal(putschSummary.sessionRoles, 2);
+  assert.equal(putschSummary.setup, true);
   assert.equal(wolfpackSummary.mechanics, 3);
   assert.equal(kingSummary.components, 6);
   assert.equal(kingSummary.sessionRoles, 2);
@@ -415,6 +421,8 @@ test("loads module mechanics and links actions to them", async () => {
   assert.equal(putsch.actions.find((action: JsonObject) => action.id === "sell-weapons").gesture, "pour-liquid");
   assert.equal(putsch.actions.find((action: JsonObject) => action.id === "sell-drugs").gesture, "palm-cover");
   assert.equal(putsch.components.find((component: JsonObject) => component.id === "vote-ballot").count, 80);
+  assert.equal(putsch.setup.distributions.length, 9);
+  assert.equal(putsch.setup.distributions.find((distribution: JsonObject) => distribution.id === "initial-copper-shares").countResource, "copperShares");
   const wolfpack = await injectJson("GET", "/modules/wolfpack-lite");
   assert.equal(wolfpack.sessionRoles.find((role: JsonObject) => role.id === "host").defaultRoleId, "captain");
   assert.equal(wolfpack.sessionRoles.find((role: JsonObject) => role.id === "host").canInjectGameElements, false);
@@ -893,6 +901,41 @@ test("runs module setup distributions into participant inventories", async () =>
   assert.equal(queenModel.aggregates, undefined);
   assert.equal(baronModel.participant.inventory["intrigue-card"], 2);
   assert.equal(baronModel.participant.inventory["status-card"], 3);
+});
+
+test("runs Putsch setup distribution once from starting resources", async () => {
+  const session = await createSession("putsch-lite");
+  const code = session.code;
+  const paquito = await createParticipant(code, "Paquito", "facilitator-capitalist");
+  const james = await createParticipant(code, "James", "kgb-agent");
+
+  const setup = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/setup/distribute`,
+    payload: {}
+  });
+
+  assert.equal(setup.statusCode, 202);
+  const body = setup.json<JsonObject>();
+  assert.equal(body.setupResult.applied, true);
+  assert.equal(body.setupResult.distributions.length, 9);
+  assert.equal(body.dashboard.participants.find((candidate: JsonObject) => candidate.id === paquito.participant.id).inventory["copper-share-card"], 50);
+  assert.equal(body.dashboard.participants.find((candidate: JsonObject) => candidate.id === james.participant.id).inventory["cf50-card"], 2);
+  assert.equal(body.dashboard.participants.find((candidate: JsonObject) => candidate.id === james.participant.id).inventory["vote-ballot"], 8);
+  assert.equal(body.dashboard.componentPools["copper-share-card"].remaining, 0);
+  assert.equal(body.dashboard.componentPools["cf50-card"].remaining, 18);
+
+  const duplicate = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/setup/distribute`,
+    payload: {}
+  });
+
+  assert.equal(duplicate.statusCode, 202);
+  const duplicateBody = duplicate.json<JsonObject>();
+  assert.equal(duplicateBody.setupResult.applied, false);
+  assert.equal(duplicateBody.setupResult.reason, "Setup already distributed");
+  assert.equal(duplicateBody.dashboard.participants.find((candidate: JsonObject) => candidate.id === paquito.participant.id).inventory["copper-share-card"], 50);
 });
 
 test("runs Long Live audience income and intrigue draws through a module action", async () => {

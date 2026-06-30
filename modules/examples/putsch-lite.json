@@ -167,6 +167,25 @@
     { "id": "drug-bag-card", "name": "Sac de drogue", "kind": "contraband-card", "count": 15, "visibility": "private", "tags": ["contraband"] },
     { "id": "vote-ballot", "name": "Bulletin de vote", "kind": "ballot", "count": 80, "visibility": "private", "tags": ["election", "council"] }
   ],
+  "setup": {
+    "phaseId": "market",
+    "instructions": [
+      "Distribuer les roles Putsch et verifier les pseudonymes.",
+      "Distribuer les cartes CF, CM, drogue, actions cuivre et bulletins selon les ressources de depart.",
+      "Confirmer que Paquito porte la casquette d'autorite si le meneur est aussi directeur des mines."
+    ],
+    "distributions": [
+      { "id": "initial-cf25", "componentId": "cf25-card", "target": "allParticipants", "countResource": "cf25", "visibility": "private" },
+      { "id": "initial-cf50", "componentId": "cf50-card", "target": "allParticipants", "countResource": "cf50", "visibility": "private" },
+      { "id": "initial-cf100", "componentId": "cf100-card", "target": "allParticipants", "countResource": "cf100", "visibility": "private" },
+      { "id": "initial-cm25", "componentId": "cm25-card", "target": "allParticipants", "countResource": "cm25", "visibility": "private" },
+      { "id": "initial-cm50", "componentId": "cm50-card", "target": "allParticipants", "countResource": "cm50", "visibility": "private" },
+      { "id": "initial-cm100", "componentId": "cm100-card", "target": "allParticipants", "countResource": "cm100", "visibility": "private" },
+      { "id": "initial-drug-bags", "componentId": "drug-bag-card", "target": "allParticipants", "countResource": "drugBags", "visibility": "private" },
+      { "id": "initial-copper-shares", "componentId": "copper-share-card", "target": "allParticipants", "countResource": "copperShares", "visibility": "private" },
+      { "id": "initial-vote-ballots", "componentId": "vote-ballot", "target": "allParticipants", "countResource": "voteBallots", "visibility": "private" }
+    ]
+  },
   "mechanics": [
     {
       "id": "direct-barter",
