@@ -188,6 +188,26 @@
   },
   "mechanics": [
     {
+      "id": "copper-market",
+      "name": "Marche des actions de cuivre",
+      "family": "market-economy",
+      "summary": "Un participant achete des actions de cuivre au directeur des mines, au cours courant, dans les limites de la phase.",
+      "phases": ["market"],
+      "inputs": [
+        { "id": "buyerId", "type": "participant", "source": "actor-or-bound-device" },
+        { "id": "quantity", "type": "number", "label": "Actions a acheter" }
+      ],
+      "resolution": {
+        "type": "marketBuy",
+        "priceState": "copperPrice",
+        "stockState": "sharesAvailableThisHour",
+        "limitState": "sharesPerBuyerLimit",
+        "sellerRoleId": "facilitator-capitalist",
+        "componentId": "copper-share-card"
+      },
+      "visibility": { "dashboard": "full", "participants": "involved-only" }
+    },
+    {
       "id": "direct-barter",
       "name": "Transaction directe",
       "family": "exchange",
@@ -304,6 +324,26 @@
     }
   ],
   "actions": [
+    {
+      "id": "buy-copper-from-mine",
+      "name": "Acheter des actions a la mine",
+      "phase": "market",
+      "actor": "any",
+      "target": "game",
+      "effect": {
+        "type": "marketBuy",
+        "resource": "copperShares",
+        "currencyResource": "money",
+        "priceState": "copperPrice",
+        "stockState": "sharesAvailableThisHour",
+        "limitState": "sharesPerBuyerLimit",
+        "sellerRoleId": "facilitator-capitalist",
+        "componentId": "copper-share-card"
+      },
+      "mechanicId": "copper-market",
+      "gesture": "tap-stack",
+      "fallback": "manual-confirmation"
+    },
     {
       "id": "sell-weapons",
       "name": "Vendre des armes",

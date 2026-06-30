@@ -390,7 +390,7 @@ test("loads module mechanics and links actions to them", async () => {
   const wolfpackSummary = modules.find((module: JsonObject) => module.id === "wolfpack-lite");
   const kingSummary = modules.find((module: JsonObject) => module.id === "long-live-the-king-lite");
 
-  assert.equal(putschSummary.mechanics, 4);
+  assert.equal(putschSummary.mechanics, 5);
   assert.equal(putschSummary.sessionRoles, 2);
   assert.equal(putschSummary.setup, true);
   assert.equal(wolfpackSummary.mechanics, 3);
@@ -400,7 +400,12 @@ test("loads module mechanics and links actions to them", async () => {
 
   const putsch = await injectJson("GET", "/modules/putsch-lite");
   const directBarter = putsch.mechanics.find((mechanic: JsonObject) => mechanic.id === "direct-barter");
+  const copperMarket = putsch.mechanics.find((mechanic: JsonObject) => mechanic.id === "copper-market");
   const sellWeapons = putsch.actions.find((action: JsonObject) => action.id === "sell-weapons");
+  const buyCopper = putsch.actions.find((action: JsonObject) => action.id === "buy-copper-from-mine");
+  assert.equal(copperMarket.family, "market-economy");
+  assert.equal(buyCopper.effect.type, "marketBuy");
+  assert.equal(buyCopper.effect.componentId, "copper-share-card");
   assert.equal(directBarter.family, "exchange");
   assert.equal(sellWeapons.mechanicId, "direct-barter");
   assert.deepEqual(putsch.actions.find((action: JsonObject) => action.id === "trade-copper-shares").effect.resources, ["money", "copperShares"]);
@@ -472,10 +477,10 @@ test("returns a dashboard read model with the complete live state", async () => 
   assert.equal(dashboard.turnPhase.phase.total, dashboard.module.phases.length);
   assert.equal(dashboard.turnPhase.durationSeconds, dashboard.phaseClock.phaseDurationSeconds);
   assert.equal(dashboard.phasePlan.phaseId, "market");
-  assert.equal(dashboard.phasePlan.actions.length, 3);
+  assert.equal(dashboard.phasePlan.actions.length, 4);
   assert.deepEqual(
     dashboard.phasePlan.actions.map((action: JsonObject) => action.id),
-    ["sell-weapons", "trade-copper-shares", "trade-arms-caches"]
+    ["buy-copper-from-mine", "sell-weapons", "trade-copper-shares", "trade-arms-caches"]
   );
   assert.equal(dashboard.phasePlan.nextPhase.id, "intrigue");
   assert.equal(dashboard.phasePlan.pendingResolutionCount, 0);
@@ -936,6 +941,53 @@ test("runs Putsch setup distribution once from starting resources", async () => 
   assert.equal(duplicateBody.setupResult.applied, false);
   assert.equal(duplicateBody.setupResult.reason, "Setup already distributed");
   assert.equal(duplicateBody.dashboard.participants.find((candidate: JsonObject) => candidate.id === paquito.participant.id).inventory["copper-share-card"], 50);
+});
+
+test("runs Putsch copper mine market buys with price stock and buyer limits", async () => {
+  const session = await createSession("putsch-lite");
+  const code = session.code;
+  const paquito = await createParticipant(code, "Paquito", "facilitator-capitalist");
+  const james = await createParticipant(code, "James", "kgb-agent");
+  await injectJson("POST", `/sessions/${code}/setup/distribute`, {});
+
+  const buy = await injectJson("POST", `/sessions/${code}/events`, {
+    type: "action.requested",
+    actionId: "buy-copper-from-mine",
+    participantId: james.participant.id,
+    payload: { quantity: 3 }
+  });
+
+  assert.equal(buy.actionResult.effect.type, "marketBuy");
+  assert.equal(buy.actionResult.effect.quantity, 3);
+  assert.equal(buy.actionResult.effect.price, 1000);
+  assert.equal(buy.actionResult.effect.totalCost, 3000);
+  assert.equal(buy.actionResult.effect.sellerId, paquito.participant.id);
+  assert.equal(buy.actionResult.effect.stock.after, 17);
+  assert.equal(buy.actionResult.effect.componentTransfer.seller.after, 47);
+  assert.equal(buy.actionResult.effect.componentTransfer.buyer.after, 3);
+
+  const paquitoState = buy.dashboard.participants.find((candidate: JsonObject) => candidate.id === paquito.participant.id);
+  const jamesState = buy.dashboard.participants.find((candidate: JsonObject) => candidate.id === james.participant.id);
+  assert.equal(paquitoState.resources.money, 3000);
+  assert.equal(paquitoState.resources.copperShares, 47);
+  assert.equal(paquitoState.inventory["copper-share-card"], 47);
+  assert.equal(jamesState.resources.money, 17000);
+  assert.equal(jamesState.resources.copperShares, 3);
+  assert.equal(jamesState.inventory["copper-share-card"], 3);
+  assert.equal(jamesState.statuses.marketPurchases["1:market:copperShares"], 3);
+
+  const blocked = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/events`,
+    payload: {
+      type: "action.requested",
+      actionId: "buy-copper-from-mine",
+      participantId: james.participant.id,
+      payload: { quantity: 3 }
+    }
+  });
+  assert.equal(blocked.statusCode, 400);
+  assert.match(blocked.json<JsonObject>().error, /participant limit/);
 });
 
 test("runs Long Live audience income and intrigue draws through a module action", async () => {

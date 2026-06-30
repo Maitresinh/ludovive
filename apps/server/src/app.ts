@@ -622,6 +622,18 @@ const castVoteEffectSchema = z.object({
   state: z.string().min(1)
 });
 
+const marketBuyEffectSchema = z.object({
+  type: z.literal("marketBuy"),
+  resource: z.string().min(1),
+  currencyResource: z.string().min(1),
+  priceState: z.string().min(1),
+  stockState: z.string().min(1).optional(),
+  limitState: z.string().min(1).optional(),
+  sellerRoleId: z.string().min(1).optional(),
+  componentId: z.string().min(1).optional(),
+  purchaseState: z.string().min(1).default("marketPurchases")
+});
+
 const unlockPhaseZoneEffectSchema = z.object({
   type: z.literal("unlockPhase"),
   phase: z.string().min(1)
@@ -644,7 +656,8 @@ const knownEffectSchema = z.discriminatedUnion("type", [
   messageEffectSchema,
   revealContactHintEffectSchema,
   runTimedIncomeEffectSchema,
-  castVoteEffectSchema
+  castVoteEffectSchema,
+  marketBuyEffectSchema
 ]);
 
 const knownZoneEffectSchema = z.discriminatedUnion("type", [
@@ -1336,6 +1349,109 @@ function runCastVote(session: Session, module: GameModule, participant: Particip
   };
 }
 
+function marketPurchaseKey(session: Session, resource: string): string {
+  return `${session.phaseClock.turn}:${currentPhase(session).id}:${resource}`;
+}
+
+function runMarketBuy(session: Session, module: GameModule, participant: Participant, effect: z.infer<typeof marketBuyEffectSchema>, event: EventInput): Record<string, unknown> {
+  const quantity = Math.floor(Number(event.payload.quantity ?? 1));
+  if (!Number.isInteger(quantity) || quantity <= 0) {
+    throw new Error("Market buy quantity must be a positive integer");
+  }
+
+  const price = Number(session.statuses[effect.priceState]);
+  if (!Number.isFinite(price) || price < 0) {
+    throw new Error(`Market price state is invalid: ${effect.priceState}`);
+  }
+  const totalCost = quantity * price;
+  const stockBefore = effect.stockState ? Number(session.statuses[effect.stockState] ?? 0) : undefined;
+  if (stockBefore !== undefined && (!Number.isFinite(stockBefore) || stockBefore < quantity)) {
+    throw new Error(`Market stock is insufficient: ${effect.stockState}`);
+  }
+
+  const purchaseKey = marketPurchaseKey(session, effect.resource);
+  const purchases = objectRecord(participant.statuses[effect.purchaseState]) ?? {};
+  const alreadyPurchased = Number(purchases[purchaseKey] ?? 0);
+  const limit = effect.limitState ? Number(session.statuses[effect.limitState]) : undefined;
+  if (limit !== undefined && Number.isFinite(limit) && alreadyPurchased + quantity > limit) {
+    throw new Error(`Market buy exceeds participant limit: ${effect.limitState}`);
+  }
+
+  const seller = effect.sellerRoleId
+    ? session.participants.find((candidate) => candidate.roleId === effect.sellerRoleId)
+    : undefined;
+  if (effect.sellerRoleId && !seller) {
+    throw new Error(`Market seller role is missing: ${effect.sellerRoleId}`);
+  }
+  if (seller?.id === participant.id) {
+    throw new Error("Market buyer cannot also be the seller");
+  }
+
+  assertResourceChange(module, participant, effect.currencyResource, -totalCost);
+  assertResourceChange(module, participant, effect.resource, quantity);
+  if (seller) {
+    assertResourceChange(module, seller, effect.resource, -quantity);
+    assertResourceChange(module, seller, effect.currencyResource, totalCost);
+  }
+  if (effect.componentId && seller && (seller.inventory[effect.componentId] ?? 0) < quantity) {
+    throw new Error(`Market seller component stock is insufficient: ${effect.componentId}`);
+  }
+
+  const buyerPayment = adjustResource(module, participant, effect.currencyResource, -totalCost);
+  const buyerResource = adjustResource(module, participant, effect.resource, quantity);
+  const sellerResource = seller ? adjustResource(module, seller, effect.resource, -quantity) : undefined;
+  const sellerPayment = seller ? adjustResource(module, seller, effect.currencyResource, totalCost) : undefined;
+  const componentTransfer = effect.componentId && seller ? {
+    componentId: effect.componentId,
+    seller: {
+      participantId: seller.id,
+      before: seller.inventory[effect.componentId] ?? 0,
+      after: (seller.inventory[effect.componentId] ?? 0) - quantity
+    },
+    buyer: {
+      participantId: participant.id,
+      before: participant.inventory[effect.componentId] ?? 0,
+      after: (participant.inventory[effect.componentId] ?? 0) + quantity
+    }
+  } : undefined;
+  if (componentTransfer && seller) {
+    seller.inventory[effect.componentId!] = componentTransfer.seller.after;
+    participant.inventory[effect.componentId!] = componentTransfer.buyer.after;
+  }
+  if (effect.stockState && stockBefore !== undefined) {
+    session.statuses[effect.stockState] = stockBefore - quantity;
+  }
+  purchases[purchaseKey] = alreadyPurchased + quantity;
+  participant.statuses[effect.purchaseState] = purchases;
+
+  return {
+    type: effect.type,
+    resource: effect.resource,
+    currencyResource: effect.currencyResource,
+    quantity,
+    price,
+    totalCost,
+    buyerId: participant.id,
+    sellerId: seller?.id,
+    purchaseKey,
+    alreadyPurchased,
+    purchasedAfter: purchases[purchaseKey],
+    limit,
+    stock: effect.stockState ? {
+      state: effect.stockState,
+      before: stockBefore,
+      after: session.statuses[effect.stockState]
+    } : undefined,
+    transfers: {
+      buyerPayment,
+      buyerResource,
+      sellerResource,
+      sellerPayment
+    },
+    componentTransfer
+  };
+}
+
 function applyEffect(session: Session, module: GameModule, participant: Participant, effect: KnownEffect, event: EventInput): Record<string, unknown> {
   if (effect.type === "adjustResource") {
     return {
@@ -1365,6 +1481,10 @@ function applyEffect(session: Session, module: GameModule, participant: Particip
 
   if (effect.type === "castVote") {
     return runCastVote(session, module, participant, effect, event);
+  }
+
+  if (effect.type === "marketBuy") {
+    return runMarketBuy(session, module, participant, effect, event);
   }
 
   participant.statuses.contactHint = {
