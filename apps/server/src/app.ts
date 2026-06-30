@@ -3052,6 +3052,16 @@ function renderIndex(): string {
     .list label input[type="checkbox"] { width: auto; margin-right: 6px; }
     .item { border: 1px solid #2f353c; border-radius: 8px; padding: 10px; background: #111417; }
     .item strong { display: block; margin-bottom: 4px; }
+    .ergoNowBoard { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+    .statTile { border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--line)); border-radius: 8px; padding: 10px; background: color-mix(in srgb, var(--panel) 82%, #0d0f11); }
+    .statTile strong { font-size: 22px; line-height: 1; }
+    .resourceWallet { display: grid; grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); gap: 8px; margin-top: 8px; }
+    .resourceChip { display: grid; grid-template-columns: 30px 1fr; align-items: center; gap: 8px; border: 1px solid #3c454f; border-radius: 8px; padding: 8px; min-width: 0; background: #0d0f11; }
+    .resourceChip .resourceValue { font-size: 20px; font-weight: 700; line-height: 1; }
+    .resourceChip .resourceName { color: var(--muted); font-size: 12px; line-height: 1.2; overflow-wrap: anywhere; }
+    .actionHeader { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+    .actionHeader strong { margin: 0; }
+    .actionMeta { flex: 0 0 auto; color: var(--muted); font-size: 12px; border: 1px solid #59616b; border-radius: 999px; padding: 3px 7px; }
     .themeBanner { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, var(--panel)), var(--panel)); }
     .turnPhase { display: grid; gap: 6px; border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
     .turnPhaseHeader { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
@@ -3445,6 +3455,16 @@ function renderIndex(): string {
         return '<div class="item"><strong>#' + (index + 1) + ' ' + score.name + '</strong><div>' + Math.round(score.total) + ' point(s)</div><div class="muted">' + (score.roleName || dashboardRoleLabel(session, score.roleId)) + '</div><div class="muted">' + details + '</div></div>';
       }).join("") || '<div class="muted">Aucun score declare pour ce module</div>';
     }
+    function dashboardResourceChip(session, resourceId, value) {
+      return '<div class="resourceChip"><span class="resourceIcon">' + dashboardResourceIcon(resourceId) + '</span><div><div class="resourceValue">' + value + '</div><div class="resourceName">' + dashboardResourceLabel(session, resourceId) + '</div></div></div>';
+    }
+    function renderDashboardResourceWallet(session, resources) {
+      const entries = Object.entries(resources || {}).filter(([, value]) => Number(value) !== 0);
+      return entries.length ? '<div class="resourceWallet">' + entries.map(([key, value]) => dashboardResourceChip(session, key, value)).join("") + '</div>' : '<div class="muted">Aucune ressource</div>';
+    }
+    function renderDashboardParticipants(session) {
+      return session.participants.map((participant) => '<div class="item participantCard"><div class="actionHeader"><strong>' + participant.name + '</strong><span class="actionMeta">' + dashboardRoleLabel(session, participant.roleId) + '</span></div>' + renderDashboardResourceWallet(session, participant.resources) + '<div>' + renderStatusList(participant.statuses) + '</div></div>').join("") || '<div class="muted">Aucun participant</div>';
+    }
     function renderMvpPanel(session) {
       const pendingCount = (session.pendingResolutions || []).length;
       const connectedCount = (session.devices || []).filter((device) => device.connected).length;
@@ -3457,7 +3477,8 @@ function renderIndex(): string {
       return [
         renderTurnPhase(session),
         renderPhasePlanSummary(session),
-        '<div class="item"><strong>Table</strong><div>' + session.participants.length + ' participant(s), ' + connectedCount + '/' + session.devices.length + ' appareil(s) connecte(s)</div><div class="muted">' + renderStatusList(session.statuses) + '</div></div>',
+        '<div class="ergoNowBoard"><div class="statTile"><strong>' + session.participants.length + '</strong><div class="muted">participants</div></div><div class="statTile"><strong>' + connectedCount + '/' + session.devices.length + '</strong><div class="muted">appareils connectes</div></div><div class="statTile"><strong>' + pendingCount + '</strong><div class="muted">resolutions</div></div></div>',
+        '<div class="item"><strong>Etat de table</strong><div class="muted">' + renderStatusList(session.statuses) + '</div></div>',
         '<div class="item"><strong>A faire</strong><div>' + nextStep + '</div></div>'
       ].join("");
     }
@@ -3532,7 +3553,7 @@ function renderIndex(): string {
       const controls = (mechanic.inputs || []).map((input) => dashboardActionInputControl(session, input)).join("");
       const disabled = actors.length === 0 ? " disabled" : "";
       const hint = actors.length === 0 ? '<div class="muted">Aucun acteur autorise dans cette phase.</div>' : "";
-      return '<div class="item ' + cssClass + ' action-' + (mechanic.family || "generic") + '"><strong>' + (themeIcon(session, mechanic.family || action.id) ? themeIcon(session, mechanic.family || action.id) + " " : "") + action.name + '</strong><div class="muted">' + (mechanic.summary || action.fallback || action.id) + '</div>' + interactionCue(session, { ...action, mechanicFamily: mechanic.family }) + hint + '<label>Acteur</label><select data-live-actor>' + actorOptions + '</select>' + dashboardContactConfirm(mechanic) + controls + '<button class="secondary ' + buttonClass + '" data-action-id="' + action.id + '"' + disabled + '>' + buttonLabel + '</button></div>';
+      return '<div class="item actionCard ' + cssClass + ' action-' + (mechanic.family || "generic") + '"><div class="actionHeader"><strong>' + (themeIcon(session, mechanic.family || action.id) ? themeIcon(session, mechanic.family || action.id) + " " : "") + action.name + '</strong><span class="actionMeta">' + (mechanic.family || "action") + '</span></div><div class="muted">' + (mechanic.summary || action.fallback || action.id) + '</div>' + interactionCue(session, { ...action, mechanicFamily: mechanic.family }) + hint + '<label>Acteur</label><select data-live-actor>' + actorOptions + '</select>' + dashboardContactConfirm(mechanic) + controls + '<button class="secondary ' + buttonClass + '" data-action-id="' + action.id + '"' + disabled + '>' + buttonLabel + '</button></div>';
     }
     function renderGameControls(session) {
       const actions = (session.module.actions || []).filter((action) => {
@@ -3618,10 +3639,7 @@ function renderIndex(): string {
       if (byId("coupCommitmentDuration")) byId("coupCommitmentDuration").value = session.statuses.coupCommitmentSeconds || 120;
       byId("themePanel").innerHTML = renderThemePanel(session);
       byId("mvpPanel").innerHTML = renderMvpPanel(session);
-      byId("participants").innerHTML = session.participants.map((participant) => {
-        const resources = Object.entries(participant.resources).map(([key, value]) => dashboardResourceLabel(session, key) + ": " + value).join(" / ");
-        return '<div class="item"><strong>' + participant.name + '</strong><div>' + dashboardRoleLabel(session, participant.roleId) + '</div><div class="muted">' + resources + '</div><div>' + renderStatusList(participant.statuses) + '</div></div>';
-      }).join("") || '<div class="muted">Aucun participant</div>';
+      byId("participants").innerHTML = renderDashboardParticipants(session);
       byId("devices").innerHTML = session.devices.map((device) => {
         const participant = session.participants.find((candidate) => candidate.id === device.participantId);
         return '<div class="item"><strong>' + device.name + '</strong><div>' + (participant ? participant.name : "non lie") + '</div><div class="muted">' + (device.connected ? "connecte" : "deconnecte") + '</div></div>';
@@ -3863,6 +3881,14 @@ function renderParticipantApp(): string {
     .pill { display: inline-block; padding: 4px 8px; border: 1px solid #59616b; border-radius: 999px; margin: 2px; font-size: 12px; color: #dce1e6; }
     .stack { display: grid; gap: 10px; }
     .item { border: 1px solid #2f353c; border-radius: 8px; padding: 10px; background: #111417; }
+    .actionHeader { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+    .actionHeader strong { margin: 0; }
+    .actionMeta { flex: 0 0 auto; color: var(--muted); font-size: 12px; border: 1px solid #59616b; border-radius: 999px; padding: 3px 7px; }
+    .resourceWallet { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+    .resourceChip { display: grid; grid-template-columns: 34px 1fr; align-items: center; gap: 8px; border: 1px solid #3c454f; border-radius: 8px; padding: 9px; min-width: 0; background: #0d0f11; }
+    .resourceChip .resourceValue { font-size: 22px; font-weight: 700; line-height: 1; }
+    .resourceChip .resourceName { color: var(--muted); font-size: 12px; line-height: 1.2; overflow-wrap: anywhere; }
+    .resolutionFocus { border-color: color-mix(in srgb, var(--warning) 55%, var(--line)); }
     .themeStrip { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, var(--panel)), var(--panel)); }
     .gestureCue { display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); border-radius: 999px; margin-top: 8px; background: color-mix(in srgb, var(--accent) 15%, transparent); font-size: 13px; }
     .fallbackCue { color: var(--muted); font-size: 12px; margin-top: 4px; }
@@ -3885,7 +3911,7 @@ function renderParticipantApp(): string {
     .phaseTrack { display: grid; grid-template-columns: repeat(var(--phase-total, 1), minmax(0, 1fr)); gap: 4px; }
     .phaseStep { height: 7px; border-radius: 999px; background: #30363d; }
     .phaseStep.active { background: var(--accent); }
-    @media (max-width: 380px) { .resourcePushGrid { grid-template-columns: 1fr; } }
+    @media (max-width: 380px) { .resourcePushGrid, .resourceWallet { grid-template-columns: 1fr; } }
     .error { color: #ffb1a8; min-height: 20px; }
     .hidden { display: none; }
     pre { white-space: pre-wrap; background: #0d0f11; padding: 12px; border-radius: 6px; overflow: auto; max-height: 260px; }
@@ -4073,6 +4099,10 @@ function renderParticipantApp(): string {
       const next = plan.nextPhase.startsNextTurn ? "Tour suivant: " : "Puis: ";
       return '<div class="item"><strong>Plan de phase</strong><div>' + plan.playableActionCount + ' action(s) possible(s)</div><div class="muted">' + plan.pendingResolutionCount + ' resolution(s) en attente</div><div class="muted">' + next + plan.nextPhase.name + '</div></div>';
     }
+    function renderResourceWallet(model, resources) {
+      const entries = Object.entries(resources || {}).filter(([, value]) => Number(value) !== 0);
+      return entries.length ? '<div class="resourceWallet">' + entries.map(([key, value]) => '<div class="resourceChip"><span class="resourceIcon">' + resourceIcon(key) + '</span><div><div class="resourceValue">' + value + '</div><div class="resourceName">' + resourceLabel(model, key) + '</div></div></div>').join("") + '</div>' : '<div class="muted">Aucune ressource</div>';
+    }
     function formatDeadline(deadline) {
       if (!deadline?.endsAt) return "temps libre";
       const remaining = Math.max(0, Math.ceil((new Date(deadline.endsAt).getTime() - Date.now()) / 1000));
@@ -4083,7 +4113,10 @@ function renderParticipantApp(): string {
       const title = resolution.mechanicId === "contested-coup" ? "Coup d'Etat en cours" : resolution.type;
       const defender = payload.defenderId ? model.visibleParticipants.find((participant) => participant.id === payload.defenderId)?.name || payload.defenderId : "";
       const deadline = payload.commitmentDeadline ? '<div class="pill">' + formatDeadline(payload.commitmentDeadline) + '</div>' : "";
-      return '<div class="item"><strong>' + title + '</strong>' + (defender ? '<div>Defenseur: ' + defender + '</div>' : '') + deadline + '<div class="muted">Les engagements sont caches jusqu a resolution.</div></div>';
+      const petition = payload.petitionText ? '<div>' + payload.petitionText + '</div>' : "";
+      const totals = payload.petitionVoteTotals ? '<div class="muted">Votes: ' + Object.entries(payload.petitionVoteTotals).map(([key, value]) => key + " " + value).join(" / ") + '</div>' : "";
+      const secretHint = resolution.mechanicId === "contested-coup" ? '<div class="muted">Les engagements sont caches jusqu a resolution.</div>' : "";
+      return '<div class="item resolutionFocus"><div class="actionHeader"><strong>' + title + '</strong><span class="actionMeta">' + (resolution.mechanicFamily || "resolution") + '</span></div>' + (defender ? '<div>Defenseur: ' + defender + '</div>' : '') + petition + totals + deadline + secretHint + '</div>';
     }
     function actionInputLabel(input) {
       const labels = {
@@ -4160,6 +4193,10 @@ function renderParticipantApp(): string {
         : "";
       return '<div class="actionInputs">' + contact + inputs.map((input) => actionInputControl(model, input)).join("") + '</div>';
     }
+    function renderActionCard(model, action) {
+      const icon = themeIcon(model, action.mechanicFamily || action.id);
+      return '<div class="item actionCard action-' + (action.mechanicFamily || "generic") + '"><div class="actionHeader"><strong>' + (icon ? icon + " " : "") + action.name + '</strong><span class="actionMeta">' + (action.mechanicFamily || "action") + '</span></div><div class="muted">' + actionHint(action) + '</div>' + interactionCue(model, action) + actionForm(model, action) + '<button class="secondary actionButton" data-action-id="' + action.id + '">' + actionVerb(action) + '</button></div>';
+    }
     function collectActionPayload(card) {
       const payload = {};
       card.querySelectorAll("[data-action-input]").forEach((field) => {
@@ -4218,7 +4255,7 @@ function renderParticipantApp(): string {
       byId("phaseClock").innerHTML = renderTurnPhase(model);
       byId("phaseClock").innerHTML += renderPhasePlanSummary(model);
       byId("roleDetails").innerHTML = renderRoleDetails(model);
-      byId("resources").innerHTML = Object.entries(model.participant.resources || {}).map(([key, value]) => '<div class="item"><strong>' + resourceLabel(model, key) + '</strong><div>' + value + '</div></div>').join("") || '<div class="muted">Aucune ressource</div>';
+      byId("resources").innerHTML = renderResourceWallet(model, model.participant.resources);
       byId("statuses").innerHTML = renderStatuses(model.participant.statuses);
       byId("exchanges").innerHTML = (model.exchanges || []).slice(-5).map((exchange) => {
         const direction = exchange.fromParticipantId === model.participant.id ? "envoye" : "recu";
@@ -4227,7 +4264,7 @@ function renderParticipantApp(): string {
       }).join("") || '<div class="muted">Aucun echange</div>';
       byId("messages").innerHTML = (model.messages || []).slice(-5).map((message) => '<div class="item"><strong>' + message.channel + '</strong><div>' + message.text + '</div></div>').join("") || '<div class="muted">Aucun message</div>';
       byId("pendingResolutions").innerHTML = (model.pendingResolutions || []).map((resolution) => renderPendingResolution(model, resolution)).join("") || '<div class="muted">Rien a traiter</div>';
-      byId("actions").innerHTML = (model.availableActions || []).filter((action) => action.available).map((action) => '<div class="item actionCard action-' + (action.mechanicFamily || "generic") + '"><strong>' + (themeIcon(model, action.mechanicFamily || action.id) ? themeIcon(model, action.mechanicFamily || action.id) + " " : "") + action.name + '</strong><div class="muted">' + actionHint(action) + '</div>' + interactionCue(model, action) + actionForm(model, action) + '<button class="secondary actionButton" data-action-id="' + action.id + '">' + actionVerb(action) + '</button></div>').join("") || '<div class="muted">Aucune action disponible dans cette phase</div>';
+      byId("actions").innerHTML = (model.availableActions || []).filter((action) => action.available).map((action) => renderActionCard(model, action)).join("") || '<div class="muted">Aucune action disponible dans cette phase</div>';
     }
     byId("loadSession").addEventListener("click", () => run(loadSession));
     byId("join").addEventListener("click", () => run(async () => {

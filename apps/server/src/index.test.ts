@@ -145,6 +145,8 @@ test("serves a one-page Putsch core demo dashboard", async () => {
   assert.match(response.body, /Poste de conduite/);
   assert.match(response.body, /id="mvpPanel"/);
   assert.match(response.body, /renderMvpPanel/);
+  assert.match(response.body, /ergoNowBoard/);
+  assert.match(response.body, /statTile/);
   assert.match(response.body, /renderTurnPhase/);
   assert.match(response.body, /formatTurnPhase/);
   assert.match(response.body, /renderPhasePlanSummary/);
@@ -155,6 +157,11 @@ test("serves a one-page Putsch core demo dashboard", async () => {
   assert.match(response.body, /interactionCue/);
   assert.match(response.body, /renderGameControls/);
   assert.match(response.body, /performGameAction/);
+  assert.match(response.body, /renderDashboardResourceWallet/);
+  assert.match(response.body, /renderDashboardParticipants/);
+  assert.match(response.body, /actionHeader/);
+  assert.match(response.body, /actionMeta/);
+  assert.match(response.body, /resourceWallet/);
   assert.match(response.body, /resourcePushGrid/);
   assert.match(response.body, /Secours dashboard/);
   assert.match(response.body, /Telephones au contact ou joueurs cote a cote/);
@@ -212,6 +219,10 @@ test("serves a mobile participant app for session join", async () => {
   assert.match(response.body, /renderTurnPhase/);
   assert.match(response.body, /formatTurnPhase/);
   assert.match(response.body, /renderPhasePlanSummary/);
+  assert.match(response.body, /renderResourceWallet/);
+  assert.match(response.body, /renderActionCard/);
+  assert.match(response.body, /resourceWallet/);
+  assert.match(response.body, /resolutionFocus/);
   assert.match(response.body, /Plan de phase/);
   assert.match(response.body, /phaseTrack/);
   assert.match(response.body, /Geste/);

@@ -24,6 +24,7 @@
 2. Long Live The King Council Slice: setup distribution, audience/diplomacy/council, petition resolution workflow.
 3. Economic Simulation Slice: resource exchanges plus dashboard aggregates for sheep/market or monetary confidence simulations.
 4. Putsch MVP+: complete playable Putsch table with clean player UI, hidden coup commitments, election, council, and playtest script.
+5. UI/Ergo MVP: table-first interface with readable phase state, resource wallets, gesture-first action cards, and module visual identity.
 
 ## Epics
 
