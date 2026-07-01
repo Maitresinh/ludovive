@@ -264,7 +264,7 @@ Participant statuses created by effects such as `setState` remain intentionally 
 - `host` is the technical/session role: it creates or opens the session, accepts devices, assigns roles, and controls phase timing.
 - `game-authority` is optional rule authority: it can inject game elements, correct state, arbitrate resolutions, draw components, send private/public messages, or override normal player limits when the module permits it.
 - `canInjectGameElements` tells the app whether this session role can introduce or modify game state beyond ordinary participant actions.
-- `assignableToRoles` links the session role to in-game roles when needed. In Putsch, the host and the director/MJ authority can be combined or separated. In the submarine module, the host can simply be the captain and does not need injection authority.
+- `assignableToRoles` links the session role to in-game roles when needed. In Banana Republic, the host is the King by default and may also hold royal authority, but those functions can be separated. In Wolfpack, the host can simply be the captain and does not need injection authority.
 
 Each session stores `sessionRoleAssignments` separately from participants' in-game `roleId`. Optional session roles start disabled; required session roles start enabled but unassigned. The prototype supports:
 

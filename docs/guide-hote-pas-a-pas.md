@@ -107,7 +107,7 @@ Dans certains jeux, la meme personne peut avoir les deux.
 
 Exemples:
 
-- dans Putsch, le directeur des mines peut etre joueur et autorite de jeu;
+- dans Banana Republic, l'hote est le Roi par defaut, et l'autorite royale peut etre gardee par lui ou separee;
 - dans Wolfpack, l'hote peut etre simplement le capitaine sans pouvoir special;
 - dans Origins, l'hote est plutot secretaire de conference;
 - dans Long Live the King, le roi ou le chambellan dirige les audiences.

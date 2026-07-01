@@ -309,25 +309,25 @@ test("serves a mobile participant app for session join", async () => {
 
 test("creates a ready-to-play Putsch demo session", async () => {
   const demo = await injectJson("POST", "/demo/putsch-lite", {});
-  const paquito = demo.participants.find((participant: JsonObject) => participant.name === "Paquito");
+  const king = demo.participants.find((participant: JsonObject) => participant.name === "Le Roi");
 
   assert.equal(demo.readModel, "dashboard");
   assert.equal(demo.module.id, "putsch-lite");
   assert.equal(demo.participants.length, 5);
   assert.equal(demo.devices.length, 5);
   assert.equal(demo.devices.every((device: JsonObject) => Boolean(device.participantId)), true);
-  assert.equal(paquito.roleId, "facilitator-capitalist");
-  assert.equal(paquito.inventory["copper-share-card"], 50);
-  assert.equal(demo.sessionRoleAssignments["game-authority"].participantId, paquito.id);
+  assert.equal(king.roleId, "facilitator-capitalist");
+  assert.equal(king.inventory["copper-share-card"], 50);
+  assert.equal(demo.sessionRoleAssignments["game-authority"].participantId, king.id);
   assert.equal(demo.messages[0].text, "Le marche ouvre.");
   assert.equal(demo.statuses.setupDistributedAt !== undefined, true);
   assert.equal(demo.componentPools["copper-share-card"].remaining, 0);
   assert.equal(demo.aggregates.inventory["vote-ballot"], 32);
 
-  const paquitoDevice = demo.devices.find((device: JsonObject) => device.participantId === paquito.id);
-  const readModel = await injectJson("GET", `/sessions/${demo.code}/read-models/device/${paquitoDevice.id}`);
+  const kingDevice = demo.devices.find((device: JsonObject) => device.participantId === king.id);
+  const readModel = await injectJson("GET", `/sessions/${demo.code}/read-models/device/${kingDevice.id}`);
   assert.equal(readModel.readModel, "device.participant");
-  assert.equal(readModel.participant.id, paquito.id);
+  assert.equal(readModel.participant.id, king.id);
   assert.equal(readModel.availableActions.some((action: JsonObject) => action.id === "trade-copper-shares"), true);
   assert.equal(readModel.participant.inventory["copper-share-card"], 50);
 });
@@ -492,10 +492,11 @@ test("loads module mechanics and links actions to them", async () => {
   assert.deepEqual(putsch.actions.find((action: JsonObject) => action.id === "trade-arms-caches").effect.resources, ["money", "cf25", "cf50", "cf100", "cm25", "cm50", "cm100"]);
   assert.equal(putsch.actions.find((action: JsonObject) => action.id === "sell-drugs").actor, "drug-trafficker");
   assert.equal(putsch.state.copperPrice, 1000);
-  assert.equal(putsch.roles.find((role: JsonObject) => role.id === "facilitator-capitalist").name, "Paquito Borrachon");
-  assert.equal(putsch.roles.find((role: JsonObject) => role.id === "facilitator-capitalist").officialRole, "President des mines de cuivre d'Alcabal et meneur de jeu.");
+  assert.equal(putsch.roles.find((role: JsonObject) => role.id === "facilitator-capitalist").name, "Le Roi");
+  assert.equal(putsch.roles.find((role: JsonObject) => role.id === "facilitator-capitalist").officialRole, "Roi de Banana Republic, proprietaire politique des mines de cuivre et meneur de jeu.");
   assert.equal(putsch.roles.find((role: JsonObject) => role.id === "facilitator-capitalist").startingResources.copperShares, 50);
   assert.equal(putsch.sessionRoles.find((role: JsonObject) => role.id === "host").canInjectGameElements, false);
+  assert.equal(putsch.sessionRoles.find((role: JsonObject) => role.id === "host").defaultRoleId, "facilitator-capitalist");
   assert.equal(putsch.sessionRoles.find((role: JsonObject) => role.id === "game-authority").defaultRoleId, "facilitator-capitalist");
   assert.equal(putsch.mechanics.find((mechanic: JsonObject) => mechanic.id === "minister-council-record").family, "live-administration");
   assert.equal(putsch.mechanics.find((mechanic: JsonObject) => mechanic.id === "minister-election").family, "vote");

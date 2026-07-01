@@ -231,8 +231,8 @@
   "sessionRoles": [
     {
       "id": "host",
-      "name": "Hote technique",
-      "description": "Ouvre la session, accueille les appareils, assigne les roles et garde le rythme de table.",
+      "name": "Hote / Roi par defaut",
+      "description": "Ouvre la session, accueille les appareils, assigne les roles et, par defaut, incarne le Roi si personne ne separe les fonctions.",
       "capabilities": [
         "session.host",
         "participants.manage",
@@ -244,12 +244,16 @@
       "modes": [
         "separate",
         "combined-with-game-authority"
-      ]
+      ],
+      "assignableToRoles": [
+        "facilitator-capitalist"
+      ],
+      "defaultRoleId": "facilitator-capitalist"
     },
     {
       "id": "game-authority",
-      "name": "Autorite d'injection",
-      "description": "Peut introduire, corriger ou arbitrer des elements de jeu sans les limites normales des joueurs.",
+      "name": "Autorite royale",
+      "description": "Le Roi peut introduire, corriger ou arbitrer des elements de jeu sans les limites normales des joueurs.",
       "capabilities": [
         "resources.adjust",
         "state.adjust",
@@ -264,8 +268,8 @@
       ],
       "defaultRoleId": "facilitator-capitalist",
       "modes": [
-        "hote-et-directeur",
-        "hote-separe-directeur-joueur"
+        "hote-roi",
+        "hote-separe-roi-joueur"
       ]
     }
   ],
@@ -327,8 +331,8 @@
     },
     {
       "id": "facilitator-capitalist",
-      "name": "Paquito Borrachon",
-      "officialRole": "President des mines de cuivre d'Alcabal et meneur de jeu.",
+      "name": "Le Roi",
+      "officialRole": "Roi de Banana Republic, proprietaire politique des mines de cuivre et meneur de jeu.",
       "secretRole": "Aucun role secret.",
       "startingResources": {
         "money": 0,
@@ -541,9 +545,9 @@
   "setup": {
     "phaseId": "market",
     "instructions": [
-      "Distribuer les roles Putsch et verifier les pseudonymes.",
+      "Distribuer les roles Banana Republic et verifier les pseudonymes; par defaut, l'hote incarne le Roi.",
       "Distribuer les cartes CF, CM, drogue, actions cuivre et bulletins selon les ressources de depart.",
-      "Confirmer que Paquito porte la casquette d'autorite si le meneur est aussi directeur des mines."
+      "Confirmer que Le Roi porte la responsabilite d'autorite royale si l'hote gere aussi les mines."
     ],
     "distributions": [
       {

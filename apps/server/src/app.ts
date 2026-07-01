@@ -3194,7 +3194,7 @@ function createPutschDemoSession(): Session {
   const module = getModuleOrThrow("putsch-lite");
   const session = createSessionInstance(module);
   const players = [
-    { name: "Paquito", roleId: "facilitator-capitalist", sessionRoleId: "game-authority" },
+    { name: "Le Roi", roleId: "facilitator-capitalist", sessionRoleId: "game-authority" },
     { name: "James", roleId: "kgb-agent" },
     { name: "Giani", roleId: "cia-agent" },
     { name: "Raul", roleId: "fun-agent" },
