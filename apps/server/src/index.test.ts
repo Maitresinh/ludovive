@@ -141,7 +141,7 @@ test("serves a one-page Putsch core demo dashboard", async () => {
   assert.match(response.body, /loadNetworkInfo/);
   assert.match(response.body, /\/network/);
   assert.match(response.body, /navigator.clipboard/);
-  assert.match(response.body, /Scenario Putsch test/);
+  assert.match(response.body, /Demo Putsch prechargee/);
   assert.match(response.body, /\/demo\/putsch-lite/);
   assert.match(response.body, /Echanges/);
   assert.match(response.body, /Controles de jeu/);
@@ -176,13 +176,13 @@ test("serves a one-page Putsch core demo dashboard", async () => {
   assert.match(response.body, /Secours dashboard/);
   assert.match(response.body, /Telephones au contact ou joueurs cote a cote/);
   assert.match(response.body, /Corriger/);
-  assert.match(response.body, /Attribuer role/);
-  assert.match(response.body, /Casquette de session/);
+  assert.match(response.body, /Attribuer ce role/);
+  assert.match(response.body, /Responsabilite d'animation/);
   assert.match(response.body, /assignSessionRole/);
   assert.match(response.body, /renderSessionRoles/);
   assert.match(response.body, /injectionAuthorityNotice/);
   assert.match(response.body, /hasDashboardInjectionAuthority/);
-  assert.match(response.body, /Casquette d'injection requise/);
+  assert.match(response.body, /Responsabilite d'injection requise/);
   assert.match(response.body, /Resolutions de phase/);
   assert.match(response.body, /id="phaseResolutions"/);
   assert.match(response.body, /renderPhaseResolutionActions/);
@@ -242,7 +242,7 @@ test("serves a mobile participant app for session join", async () => {
   assert.match(response.body, /URLSearchParams/);
   assert.match(response.body, /switchingSession/);
   assert.match(response.body, /forgetDevice/);
-  assert.match(response.body, /Le MJ attribuera/);
+  assert.match(response.body, /L'hote attribuera/);
   assert.match(response.body, /Entrer dans la partie/);
   assert.match(response.body, /Declencher/);
   assert.match(response.body, /id="roleDetails"/);

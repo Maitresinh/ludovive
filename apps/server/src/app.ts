@@ -3310,11 +3310,12 @@ function renderIndex(): string {
       <div class="stack">
         <section>
           <h2>Session</h2>
-        <label for="module">Module</label>
+        <label for="module">Jeu / module</label>
         <select id="module"></select>
+        <div class="muted">Choisit le jeu a faire tourner. La demo prechargee sert seulement a tester vite une table Putsch.</div>
           <div class="actions">
-            <button id="create">Creer</button>
-            <button id="seed" class="success">Scenario Putsch test</button>
+            <button id="create">Creer session vide</button>
+            <button id="seed" class="success">Demo Putsch prechargee</button>
             <button id="refresh" class="secondary">Rafraichir</button>
           </div>
         <label for="code">Code session</label>
@@ -3335,20 +3336,20 @@ function renderIndex(): string {
         </section>
 
         <section>
-          <h2>Participant</h2>
-          <label for="participantName">Nom</label>
+          <h2>Ajouter un joueur ou poste</h2>
+          <label for="participantName">Nom affiche</label>
           <input id="participantName" placeholder="Ana" />
-          <label for="roleId">Role</label>
+          <label for="roleId">Role de jeu initial</label>
           <select id="roleId"></select>
-          <button id="createParticipant">Creer participant</button>
+          <button id="createParticipant">Ajouter a la session</button>
 
-          <label for="deviceName">Appareil</label>
+          <label for="deviceName">Appareil a enregistrer</label>
           <input id="deviceName" placeholder="Telephone Ana" />
-          <button id="createDevice" class="secondary">Creer appareil</button>
+          <button id="createDevice" class="secondary">Enregistrer appareil</button>
 
           <label for="bindDeviceId">Appareil a lier</label>
           <select id="bindDeviceId"></select>
-          <label for="bindParticipantId">Participant</label>
+          <label for="bindParticipantId">Joueur ou poste</label>
           <select id="bindParticipantId"></select>
           <button id="bind" class="secondary">Lier</button>
         </section>
@@ -3366,19 +3367,19 @@ function renderIndex(): string {
           <textarea id="messageText">Le marche ouvre.</textarea>
           <button id="sendMessage">Envoyer</button>
 
-          <h3>Role</h3>
-          <label for="roleParticipant">Participant</label>
+          <h3>Changer le role de jeu</h3>
+          <label for="roleParticipant">Joueur ou poste</label>
           <select id="roleParticipant"></select>
-          <label for="assignRoleId">Role a attribuer</label>
+          <label for="assignRoleId">Nouveau role de jeu</label>
           <select id="assignRoleId"></select>
-          <button id="assignRole" class="secondary">Attribuer role</button>
+          <button id="assignRole" class="secondary">Attribuer ce role</button>
 
-          <h3>Casquette de session</h3>
-          <label for="sessionRoleId">Casquette</label>
+          <h3>Responsabilite d'animation</h3>
+          <label for="sessionRoleId">Responsabilite</label>
           <select id="sessionRoleId"></select>
-          <label for="sessionRoleParticipant">Participant porteur</label>
+          <label for="sessionRoleParticipant">Porteur</label>
           <select id="sessionRoleParticipant"></select>
-          <button id="assignSessionRole" class="secondary">Attribuer casquette</button>
+          <button id="assignSessionRole" class="secondary">Attribuer responsabilite</button>
           <div id="sessionRoles" class="list"></div>
           <div id="injectionAuthorityNotice" class="muted"></div>
 
@@ -3670,16 +3671,16 @@ function renderIndex(): string {
       const hasAuthority = hasDashboardInjectionAuthority(session);
       const needsAuthority = (session.module.sessionRoles || []).some((sessionRole) => sessionRole.canInjectGameElements);
       byId("injectionAuthorityNotice").textContent = needsAuthority && !hasAuthority
-        ? "Assignez une casquette d'injection avant de corriger ou arbitrer."
+        ? "Assignez une responsabilite d'injection avant de corriger ou arbitrer."
         : "";
       byId("setResource").disabled = !hasAuthority;
       document.querySelectorAll(".resolveResolution").forEach((button) => {
         button.disabled = !hasAuthority;
-        button.title = hasAuthority ? "" : "Casquette d'injection requise";
+        button.title = hasAuthority ? "" : "Responsabilite d'injection requise";
       });
       document.querySelectorAll(".recordPhaseResolution").forEach((button) => {
         button.disabled = !hasAuthority;
-        button.title = hasAuthority ? "" : "Casquette d'injection requise";
+        button.title = hasAuthority ? "" : "Responsabilite d'injection requise";
       });
     }
     function renderSessionRoles(session) {
@@ -4277,11 +4278,11 @@ function renderParticipantApp(): string {
       <h2>Rejoindre une session</h2>
       <label for="code">Code MJ</label>
       <input id="code" autocomplete="off" placeholder="ABC123" />
-      <button id="loadSession" class="secondary">Charger les roles</button>
-      <label for="name">Nom</label>
+      <button id="loadSession" class="secondary">Charger les roles du jeu</button>
+      <label for="name">Nom affiche</label>
       <input id="name" autocomplete="name" placeholder="Ana" />
-      <label for="roleId">Role</label>
-      <select id="roleId"><option value="">Le MJ attribuera</option></select>
+      <label for="roleId">Role de jeu</label>
+      <select id="roleId"><option value="">L'hote attribuera</option></select>
       <button id="join">Entrer dans la partie</button>
       <div class="error" id="error"></div>
     </section>
@@ -4345,7 +4346,7 @@ function renderParticipantApp(): string {
       const code = byId("code").value.trim().toUpperCase();
       if (!code) return;
       const session = await api("/sessions/" + code);
-      byId("roleId").innerHTML = option("", "Le MJ attribuera") + session.module.roles.map((role) => option(role.id, role.name)).join("");
+      byId("roleId").innerHTML = option("", "L'hote attribuera") + session.module.roles.map((role) => option(role.id, role.name)).join("");
       sessionCode = session.code;
       byId("code").value = session.code;
     }
@@ -4500,7 +4501,7 @@ function renderParticipantApp(): string {
     }
     function renderRoleDetails(model) {
       const role = model.characterReference?.ownRole || model.ownRole;
-      if (!role) return '<div class="muted">Role a attribuer par le meneur</div>';
+      if (!role) return '<div class="muted">Role de jeu a attribuer par l'hote</div>';
       const responsibilities = (role.responsibilities || []).length ? '<h3>Responsabilites</h3><ul>' + role.responsibilities.map((item) => '<li>' + item + '</li>').join("") + '</ul>' : "";
       const actions = (role.actions || []).length ? '<h3>Actions</h3><div>' + role.actions.map((item) => '<span class="pill">' + item + '</span>').join("") + '</div>' : "";
       const resources = role.startingResources && Object.keys(role.startingResources).length ? '<h3>Depart</h3><div>' + Object.entries(role.startingResources).map(([key, value]) => '<span class="pill">' + resourceLabel(model, key) + ': ' + value + '</span>').join("") + '</div>' : "";
