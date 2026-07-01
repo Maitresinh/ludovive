@@ -31,6 +31,9 @@ Current example modules:
 - `putsch-lite`
 - `long-live-the-king-lite`
 - `wolfpack-lite`, a WWII submarine crew coordination module inspired by the coordinated-stations feel of games like Captain Sonar, without copying its rules.
+- `origins-ww1-lite`, a live-first diplomatic module where physical cards are replaced by hidden digital orders and special-action permissions.
+
+Design notes for Wolfpack live crew play are in `docs/wolfpack-rules-notes.md`.
 
 ## MVP Scope
 

@@ -445,6 +445,8 @@ test("loads module mechanics and links actions to them", async () => {
   assert.equal(putschSummary.sessionRoles, 2);
   assert.equal(putschSummary.setup, true);
   assert.equal(wolfpackSummary.mechanics, 3);
+  assert.equal(wolfpackSummary.components, 5);
+  assert.equal(wolfpackSummary.setup, true);
   assert.equal(kingSummary.components, 6);
   assert.equal(kingSummary.sessionRoles, 2);
   assert.equal(kingSummary.setup, true);
@@ -491,6 +493,15 @@ test("loads module mechanics and links actions to them", async () => {
   const wolfpack = await injectJson("GET", "/modules/wolfpack-lite");
   assert.equal(wolfpack.sessionRoles.find((role: JsonObject) => role.id === "host").defaultRoleId, "captain");
   assert.equal(wolfpack.sessionRoles.find((role: JsonObject) => role.id === "host").canInjectGameElements, false);
+  assert.equal(wolfpack.uiTheme.template, "submarine-stations");
+  assert.equal(wolfpack.soundboard.find((cue: JsonObject) => cue.id === "attack-alarm").channel, "alert");
+  assert.equal(wolfpack.state.missionMode, "cooperative-hunt");
+  assert.equal(wolfpack.resources.some((resource: JsonObject) => resource.id === "solution"), true);
+  assert.equal(wolfpack.setup.instructions.some((instruction: string) => instruction.includes("chaque telephone est un poste")), true);
+  assert.equal(wolfpack.actions.find((action: JsonObject) => action.id === "authorize-fire").effect.state, "captainAuthorization");
+  assert.equal(wolfpack.actions.find((action: JsonObject) => action.id === "compute-solution").effect.resource, "solution");
+  assert.equal(wolfpack.actions.find((action: JsonObject) => action.id === "repair-system").phase, "damage-control");
+  assert.equal(wolfpack.actions.find((action: JsonObject) => action.id === "send-burst").actor, "radio");
   const king = await injectJson("GET", "/modules/long-live-the-king-lite");
   assert.equal(king.state.healthCardsInLine, 6);
   assert.equal(king.uiTheme.template, "court-intrigue");
@@ -700,7 +711,8 @@ test("returns device sync package with filtered read model and audit catch-up", 
   assert.equal(unboundSync.readModel.readModel, "device.unbound");
   assert.equal(unboundSync.readModel.turnPhase.phase.id, "briefing");
   assert.equal(unboundSync.readModel.turnPhase.phase.total, 5);
-  assert.equal(unboundSync.readModel.phasePlan.actions.length, 1);
+  assert.equal(unboundSync.readModel.phasePlan.actions.some((action: JsonObject) => action.id === "issue-order"), true);
+  assert.equal(unboundSync.readModel.phasePlan.actions.some((action: JsonObject) => action.id === "decode-message"), true);
   assert.equal(unboundSync.readModel.phasePlan.nextPhase.id, "silent-running");
   assert.deepEqual(unboundSync.audit.entries, []);
 });

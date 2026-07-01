@@ -4,6 +4,61 @@
   "version": "0.1.0",
   "pitch": "Un equipage de sous-marin pendant la Seconde Guerre mondiale coordonne navigation, machines, sonar, armement et commandement pour traquer ou fuir un ennemi.",
   "inspirationNotes": "Module original pour Ludovive, inspire des jeux d'equipage coordonne en temps reel comme Captain Sonar de Roberto Fraga et Yohan Lemonnier, sans reprendre leurs regles.",
+  "uiTheme": {
+    "template": "submarine-stations",
+    "tone": "Acier, cadrans, lumiere rouge, cartes marines, messages courts et pression d'equipage.",
+    "colors": {
+      "background": "#0b1114",
+      "panel": "#172025",
+      "ink": "#e9f0e6",
+      "muted": "#9fb0aa",
+      "accent": "#b64035",
+      "secondary": "#2f6a78",
+      "success": "#4f7b56",
+      "warning": "#c69a3d"
+    },
+    "icons": {
+      "game": "SUB",
+      "coordination": "ORD",
+      "resource-action": "SYS",
+      "contest": "TIR",
+      "hull": "COQ",
+      "oxygen": "O2",
+      "battery": "BAT",
+      "noise": "BR",
+      "torpedoes": "TOR",
+      "solution": "SOL",
+      "intel": "INT"
+    },
+    "interactionLabels": {
+      "primary": "Geste de poste",
+      "fallback": "Controle de bord"
+    }
+  },
+  "soundboard": [
+    { "id": "briefing-bell", "name": "Briefing equipage", "channel": "stinger", "phase": "briefing", "tone": "cloche courte et murmure de salle des cartes", "visibility": "all" },
+    { "id": "silent-running", "name": "Silence machine", "channel": "event", "phase": "silent-running", "tone": "moteurs etouffes, metal sous pression", "visibility": "all" },
+    { "id": "sonar-contact", "name": "Contact sonar", "channel": "alert", "phase": "contact", "tone": "ping sonar isole puis silence", "visibility": "all" },
+    { "id": "attack-alarm", "name": "Postes de combat", "channel": "alert", "phase": "attack-run", "tone": "alarme rouge et ordre bref", "visibility": "all" },
+    { "id": "damage-control", "name": "Equipe avaries", "channel": "alert", "phase": "damage-control", "tone": "fuite, outils, metal qui craque", "visibility": "all" }
+  ],
+  "state": {
+    "missionMode": "cooperative-hunt",
+    "depth": "periscope-depth",
+    "heading": "north-east",
+    "enemyRange": "unknown",
+    "enemyBearing": "unknown",
+    "contactQuality": "none",
+    "captainAuthorization": false,
+    "torpedoLoaded": false,
+    "evasion": "none",
+    "missionClock": 0,
+    "playtestNotes": {
+      "cooperative": "Un seul equipage traque un convoi ou un sous-marin ennemi gere par l'hote.",
+      "duel": "Deux equipages peuvent jouer en miroir; chaque equipe garde ses postes et son dashboard filtre.",
+      "liveAdaptation": "Les telephones representent les postes: le geste donne le ton, l'app enregistre l'ordre, le cout et l'effet."
+    }
+  },
   "players": { "min": 3, "max": 10 },
   "teamMode": {
     "enabled": true,
@@ -17,8 +72,30 @@
     { "id": "battery", "name": "Batteries", "visibility": "team", "min": 0, "max": 12 },
     { "id": "noise", "name": "Bruit", "visibility": "team", "min": 0, "max": 10 },
     { "id": "torpedoes", "name": "Torpilles", "visibility": "team", "min": 0, "max": 6 },
+    { "id": "solution", "name": "Solution de tir", "visibility": "team", "min": 0, "max": 6 },
     { "id": "intel", "name": "Renseignements", "visibility": "private", "min": 0 }
   ],
+  "components": [
+    { "id": "mission-sheet", "name": "Ordre de mission", "kind": "mission-reference", "count": 1, "visibility": "dashboard", "tags": ["mission", "setup"] },
+    { "id": "station-panel", "name": "Panneau de poste", "kind": "station-reference", "count": 6, "visibility": "private", "tags": ["station", "reference"] },
+    { "id": "contact-marker", "name": "Marqueur contact", "kind": "map-marker", "count": 8, "visibility": "dashboard", "tags": ["map", "contact"] },
+    { "id": "damage-token", "name": "Jeton avarie", "kind": "status-token", "count": 12, "visibility": "team", "tags": ["damage", "repair"] },
+    { "id": "torpedo-tube", "name": "Tube lance-torpille", "kind": "weapon-slot", "count": 4, "visibility": "team", "tags": ["weapon", "slot"] }
+  ],
+  "setup": {
+    "phaseId": "briefing",
+    "instructions": [
+      "Choisir le mode: cooperation contre menace geree par l'hote, ou duel entre deux equipages.",
+      "Assigner les postes: capitaine, pilote, machiniste, sonar, torpilles, radio. A moins de six joueurs, fusionner radio avec sonar ou torpilles avec machiniste.",
+      "Le capitaine est l'hote technique: il garde le rythme mais ne dispose pas de pouvoirs de MJ illimites.",
+      "Initialiser la coque, l'oxygene, les batteries, les torpilles et le bruit selon le scenario choisi.",
+      "Placer le sous-marin en mer ouverte et noter la mission: traquer, survivre, intercepter ou s'echapper.",
+      "Expliquer aux joueurs que chaque telephone est un poste: les gestes confirment l'action, les boutons restent le secours MVP."
+    ],
+    "distributions": [
+      { "id": "initial-station-panel", "componentId": "station-panel", "target": "allParticipants", "count": 1, "visibility": "private" }
+    ]
+  },
   "sessionRoles": [
     {
       "id": "host",
@@ -69,7 +146,7 @@
     {
       "id": "weapons",
       "name": "Officier torpilles",
-      "startingResources": {},
+      "startingResources": { "solution": 0 },
       "responsibilities": ["Armer les torpilles", "Calculer une solution de tir", "Tirer quand le capitaine autorise"],
       "actions": ["load-torpedo", "compute-solution", "fire-torpedo"]
     },
@@ -97,7 +174,9 @@
       "visibility": { "dashboard": "full", "team": "message-only" },
       "variants": [
         { "id": "captain-authorization", "name": "Autorisation du capitaine", "setsStatus": "captainAuthorization" },
-        { "id": "radio-risk", "name": "Emission risquee", "addsRisk": "enemy-detection" }
+        { "id": "radio-risk", "name": "Emission risquee", "addsRisk": "enemy-detection" },
+        { "id": "station-report", "name": "Compte rendu de poste", "visibility": "team" },
+        { "id": "silent-order", "name": "Ordre discret", "visibility": "private-or-dashboard" }
       ]
     },
     {
@@ -115,7 +194,10 @@
       "visibility": { "dashboard": "full", "team": "effect-summary", "actor": "full" },
       "variants": [
         { "id": "sensor-check", "name": "Detection partielle", "effect": "hint" },
-        { "id": "armed-state", "name": "Etat arme", "effect": "setState" }
+        { "id": "armed-state", "name": "Etat arme", "effect": "setState" },
+        { "id": "power-routing", "name": "Repartition d'energie", "effect": "resource-delta" },
+        { "id": "damage-repair", "name": "Controle des avaries", "effect": "resource-delta" },
+        { "id": "evasion-state", "name": "Manoeuvre evasive", "effect": "setState" }
       ]
     },
     {
@@ -134,7 +216,9 @@
       "visibility": { "dashboard": "full", "teams": "result-only" },
       "variants": [
         { "id": "hidden-target", "name": "Cible estimee", "targetPrecision": "low" },
-        { "id": "simultaneous", "name": "Tirs simultanes", "ordering": "simultaneous" }
+        { "id": "simultaneous", "name": "Tirs simultanes", "ordering": "simultaneous" },
+        { "id": "escort-counterattack", "name": "Riposte d'escorte", "onMiss": "increaseDamageRisk" },
+        { "id": "duel-fire", "name": "Duel de sous-marins", "ordering": "phase-or-simultaneous" }
       ]
     }
   ],
@@ -151,6 +235,28 @@
       "fallback": "manual-confirmation"
     },
     {
+      "id": "authorize-fire",
+      "name": "Autoriser le tir",
+      "phase": "attack-run",
+      "actor": "captain",
+      "target": "team",
+      "effect": { "type": "setState", "state": "captainAuthorization", "value": true },
+      "mechanicId": "crew-command",
+      "gesture": "hold-phone-up",
+      "fallback": "manual-confirmation"
+    },
+    {
+      "id": "emergency-dive",
+      "name": "Plongee d'urgence",
+      "phase": "*",
+      "actor": "captain",
+      "target": "team",
+      "effect": { "type": "setState", "state": "depth", "value": "deep" },
+      "mechanicId": "crew-command",
+      "gesture": "tilt-phone-forward",
+      "fallback": "manual-confirmation"
+    },
+    {
       "id": "change-depth",
       "name": "Changer de profondeur",
       "phase": "silent-running",
@@ -160,6 +266,30 @@
       "effect": { "type": "setState", "state": "depth" },
       "mechanicId": "station-action",
       "gesture": "tilt-phone-forward",
+      "fallback": "manual-confirmation"
+    },
+    {
+      "id": "change-heading",
+      "name": "Changer de cap",
+      "phase": "silent-running",
+      "actor": "helmsman",
+      "target": "team",
+      "cost": { "battery": 1 },
+      "effect": { "type": "setState", "state": "heading" },
+      "mechanicId": "station-action",
+      "gesture": "tilt-phone-side",
+      "fallback": "manual-confirmation"
+    },
+    {
+      "id": "evade",
+      "name": "Manoeuvre evasive",
+      "phase": "attack-run",
+      "actor": "helmsman",
+      "target": "team",
+      "cost": { "battery": 1 },
+      "effect": { "type": "setState", "state": "evasion", "value": "active" },
+      "mechanicId": "station-action",
+      "gesture": "shake-phone",
       "fallback": "manual-confirmation"
     },
     {
@@ -175,6 +305,29 @@
       "fallback": "manual-confirmation"
     },
     {
+      "id": "reroute-power",
+      "name": "Repartir l'energie",
+      "phase": "damage-control",
+      "actor": "engineer",
+      "target": "team",
+      "effect": { "type": "adjustResource", "resource": "battery", "delta": 2 },
+      "mechanicId": "station-action",
+      "gesture": "slide-resource-to-edge",
+      "fallback": "manual-confirmation"
+    },
+    {
+      "id": "repair-system",
+      "name": "Reparer une avarie",
+      "phase": "damage-control",
+      "actor": "engineer",
+      "target": "team",
+      "cost": { "battery": 1 },
+      "effect": { "type": "adjustResource", "resource": "hull", "delta": 1 },
+      "mechanicId": "station-action",
+      "gesture": "tap-and-hold",
+      "fallback": "manual-confirmation"
+    },
+    {
       "id": "sonar-sweep",
       "name": "Balayage sonar",
       "phase": "contact",
@@ -184,6 +337,28 @@
       "effect": { "type": "revealContactHint", "precision": "low" },
       "mechanicId": "station-action",
       "gesture": "slow-phone-arc",
+      "fallback": "manual-confirmation"
+    },
+    {
+      "id": "classify-contact",
+      "name": "Classifier le contact",
+      "phase": "contact",
+      "actor": "sonar",
+      "target": "zone",
+      "effect": { "type": "revealContactHint", "precision": "medium" },
+      "mechanicId": "station-action",
+      "gesture": "slow-phone-arc",
+      "fallback": "manual-confirmation"
+    },
+    {
+      "id": "listen-silently",
+      "name": "Ecoute passive",
+      "phase": "contact",
+      "actor": "sonar",
+      "target": "team",
+      "effect": { "type": "setState", "state": "contactQuality", "value": "passive-listening" },
+      "mechanicId": "station-action",
+      "gesture": "phone-face-down",
       "fallback": "manual-confirmation"
     },
     {
@@ -199,6 +374,17 @@
       "fallback": "manual-confirmation"
     },
     {
+      "id": "compute-solution",
+      "name": "Calculer une solution de tir",
+      "phase": "attack-run",
+      "actor": "weapons",
+      "target": "enemy",
+      "effect": { "type": "adjustResource", "resource": "solution", "delta": 2 },
+      "mechanicId": "station-action",
+      "gesture": "slow-phone-arc",
+      "fallback": "manual-confirmation"
+    },
+    {
       "id": "fire-torpedo",
       "name": "Tir torpille",
       "phase": "attack-run",
@@ -208,6 +394,39 @@
       "effect": { "type": "contestedAttack", "attackResource": "solution", "defenseResource": "evasion" },
       "mechanicId": "contested-attack",
       "gesture": "strike-phone",
+      "fallback": "manual-confirmation"
+    },
+    {
+      "id": "decode-message",
+      "name": "Decoder un message",
+      "phase": "briefing",
+      "actor": "radio",
+      "target": "team",
+      "effect": { "type": "revealContactHint", "precision": "mission" },
+      "mechanicId": "station-action",
+      "gesture": "tap-and-hold",
+      "fallback": "manual-confirmation"
+    },
+    {
+      "id": "send-burst",
+      "name": "Emission radio breve",
+      "phase": "contact",
+      "actor": "radio",
+      "target": "dashboard",
+      "effect": { "type": "message", "visibility": "dashboard" },
+      "mechanicId": "crew-command",
+      "gesture": "hold-phone-up",
+      "fallback": "manual-confirmation"
+    },
+    {
+      "id": "intercept",
+      "name": "Intercepter un signal",
+      "phase": "contact",
+      "actor": "radio",
+      "target": "zone",
+      "effect": { "type": "revealContactHint", "precision": "low" },
+      "mechanicId": "station-action",
+      "gesture": "slow-phone-arc",
       "fallback": "manual-confirmation"
     }
   ],
