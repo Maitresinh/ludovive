@@ -3333,13 +3333,15 @@ function renderIndex(): string {
     <div class="layout">
       <div class="stack">
         <section>
-          <h2>Session</h2>
-        <label for="module">Jeu / module</label>
+          <h2>1. Choix du jeu</h2>
+        <label for="module">Jeu a lancer</label>
         <select id="module"></select>
-        <div class="muted">Choisit le jeu a faire tourner. La demo prechargee sert seulement a tester vite une table Banana Republic.</div>
+        <div id="currentGame" class="muted">Aucune session chargee.</div>
+        <div class="muted">Le jeu est choisi une seule fois avant la creation de session. Ensuite les telephones rejoignent la salle d'attente.</div>
           <div class="actions">
             <button id="create">Creer session vide</button>
             <button id="seed" class="success">Demo Banana Republic</button>
+            <button id="newSession" class="neutral">Preparer une autre session</button>
             <button id="refresh" class="secondary">Rafraichir</button>
           </div>
         <label for="code">Code session</label>
@@ -3360,12 +3362,10 @@ function renderIndex(): string {
         </section>
 
         <section>
-          <h2>Ajouter un joueur ou poste</h2>
+          <h2>2. Salle d'attente & affectation</h2>
           <label for="participantName">Nom affiche</label>
           <input id="participantName" placeholder="Ana" />
-          <label for="roleId">Role de jeu initial</label>
-          <select id="roleId"></select>
-          <button id="createParticipant">Ajouter a la session</button>
+          <button id="createParticipant">Ajouter sans telephone</button>
 
           <label for="deviceName">Appareil a enregistrer</label>
           <input id="deviceName" placeholder="Telephone Ana" />
@@ -3963,6 +3963,7 @@ function renderIndex(): string {
       byId("module").innerHTML = list.map((m) => option(m.id, m.name)).join("");
       byId("module").value = "putsch-lite";
       await loadModuleDetails("putsch-lite");
+      setGameSelectionLocked(false);
     }
     async function loadNetworkInfo() {
       try {
@@ -3976,10 +3977,25 @@ function renderIndex(): string {
       }
     }
     async function loadModuleDetails(moduleId) {
+      if (currentSession) return;
       const module = await api("/modules/" + moduleId);
-      byId("roleId").innerHTML = module.roles.map((role) => option(role.id, role.name)).join("");
       byId("assignRoleId").innerHTML = module.roles.map((role) => option(role.id, role.name)).join("");
       byId("resourceId").innerHTML = module.resources.map((resource) => option(resource.id, resource.name)).join("");
+    }
+    function setGameSelectionLocked(locked) {
+      byId("module").disabled = locked;
+      byId("create").disabled = locked;
+      byId("seed").disabled = locked;
+      byId("newSession").disabled = false;
+      byId("currentGame").textContent = locked && currentSession
+        ? "Session active: " + currentSession.module.name + " (" + currentSession.code + "). Le jeu ne peut plus etre change pour cette table."
+        : "Choisis le jeu, puis cree la session.";
+    }
+    function syncSessionMenus(session) {
+      byId("module").value = session.module.id;
+      byId("assignRoleId").innerHTML = session.module.roles.map((role) => option(role.id, role.name)).join("");
+      byId("resourceId").innerHTML = session.module.resources.map((resource) => option(resource.id, resource.name)).join("");
+      setGameSelectionLocked(true);
     }
     async function refresh() {
       const code = byId("code").value || sessionCode;
@@ -3990,6 +4006,7 @@ function renderIndex(): string {
     function render(session) {
       currentSession = session;
       applyTheme(session.module.uiTheme);
+      syncSessionMenus(session);
       sessionCode = session.code;
       byId("code").value = session.code;
       byId("participantLink").href = "/play?code=" + encodeURIComponent(session.code);
@@ -4106,7 +4123,10 @@ function renderIndex(): string {
       });
       return payload;
     }
-    byId("module").addEventListener("change", async () => loadModuleDetails(byId("module").value));
+    byId("module").addEventListener("change", async () => {
+      if (currentSession) return;
+      await loadModuleDetails(byId("module").value);
+    });
     byId("create").addEventListener("click", () => run(async () => {
       const moduleId = byId("module").value;
       const session = await api("/sessions", { method: "POST", body: JSON.stringify({ moduleId }) });
@@ -4125,9 +4145,17 @@ function renderIndex(): string {
       render(session);
     }));
     byId("createParticipant").addEventListener("click", () => run(async () => {
-      await api("/sessions/" + sessionCode + "/participants", { method: "POST", body: JSON.stringify({ name: byId("participantName").value, roleId: byId("roleId").value }) });
+      await api("/sessions/" + sessionCode + "/participants", { method: "POST", body: JSON.stringify({ name: byId("participantName").value }) });
       byId("participantName").value = "";
       await refresh();
+    }));
+    byId("newSession").addEventListener("click", () => run(async () => {
+      currentSession = undefined;
+      sessionCode = "";
+      byId("code").value = "";
+      byId("summary").innerHTML = "";
+      setGameSelectionLocked(false);
+      await loadModuleDetails(byId("module").value);
     }));
     byId("createDevice").addEventListener("click", () => run(async () => {
       await api("/sessions/" + sessionCode + "/devices", { method: "POST", body: JSON.stringify({ name: byId("deviceName").value }) });
@@ -4338,12 +4366,11 @@ function renderParticipantApp(): string {
       <h2>Rejoindre une session</h2>
       <label for="code">Code MJ</label>
       <input id="code" autocomplete="off" placeholder="ABC123" />
-      <button id="loadSession" class="secondary">Charger les roles du jeu</button>
+      <button id="loadSession" class="secondary">Verifier la session</button>
       <label for="name">Nom affiche</label>
       <input id="name" autocomplete="name" placeholder="Ana" />
-      <label for="roleId">Role de jeu</label>
-      <select id="roleId"><option value="">L'hote attribuera</option></select>
-      <button id="join">Entrer dans la partie</button>
+      <div id="waitingRoomHint" class="muted">Entre ton nom: l'hote t'affectera ensuite un role.</div>
+      <button id="join">Entrer en salle d'attente</button>
       <div class="error" id="error"></div>
     </section>
 
@@ -4357,6 +4384,7 @@ function renderParticipantApp(): string {
       <div id="playerTabTable" class="tabPanel">
         <div id="themeStrip" class="stack"></div>
         <div id="summary"></div>
+        <div id="waitingRoomNotice"></div>
         <div id="phaseClock" class="stack"></div>
         <h3>Ressources</h3>
         <div id="resources" class="stack"></div>
@@ -4406,7 +4434,7 @@ function renderParticipantApp(): string {
       const code = byId("code").value.trim().toUpperCase();
       if (!code) return;
       const session = await api("/sessions/" + code);
-      byId("roleId").innerHTML = option("", "L'hote attribuera") + session.module.roles.map((role) => option(role.id, role.name)).join("");
+      byId("waitingRoomHint").textContent = "Session " + session.module.name + " trouvee. Entre ton nom; l'hote t'affectera un role.";
       sessionCode = session.code;
       byId("code").value = session.code;
     }
@@ -4775,6 +4803,9 @@ function renderParticipantApp(): string {
         '<span class="pill">' + roleLabel(model, model.participant.roleId) + '</span>',
         renderStatusPills(model.tableStatuses)
       ].join(" ");
+      byId("waitingRoomNotice").innerHTML = model.participant.roleId
+        ? ""
+        : "<div class=\"item resolutionFocus\"><strong>Salle d'attente</strong><div>L'hote voit ton telephone et doit maintenant t'affecter un role.</div></div>";
       byId("phaseClock").innerHTML = renderTurnPhase(model);
       byId("phaseClock").innerHTML += renderPhasePlanSummary(model);
       byId("roleDetails").innerHTML = renderRoleDetails(model);
@@ -4796,10 +4827,8 @@ function renderParticipantApp(): string {
     }
     byId("loadSession").addEventListener("click", () => run(loadSession));
     byId("join").addEventListener("click", () => run(async () => {
-      const selectedRoleId = byId("roleId").value;
       await loadSession();
       const payload = { name: byId("name").value.trim() };
-      if (selectedRoleId) payload.roleId = selectedRoleId;
       const result = await api("/sessions/" + sessionCode + "/join", { method: "POST", body: JSON.stringify(payload) });
       deviceId = result.device.id;
       sessionCode = result.sessionCode;

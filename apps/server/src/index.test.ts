@@ -141,6 +141,11 @@ test("serves a one-page Putsch core demo dashboard", async () => {
   assert.match(response.body, /loadNetworkInfo/);
   assert.match(response.body, /\/network/);
   assert.match(response.body, /navigator.clipboard/);
+  assert.match(response.body, /1\. Choix du jeu/);
+  assert.match(response.body, /id="currentGame"/);
+  assert.match(response.body, /setGameSelectionLocked/);
+  assert.match(response.body, /Preparer une autre session/);
+  assert.match(response.body, /2\. Salle d'attente & affectation/);
   assert.match(response.body, /Demo Banana Republic/);
   assert.match(response.body, /\/demo\/putsch-lite/);
   assert.match(response.body, /Echanges/);
@@ -259,8 +264,11 @@ test("serves a mobile participant app for session join", async () => {
   assert.match(response.body, /URLSearchParams/);
   assert.match(response.body, /switchingSession/);
   assert.match(response.body, /forgetDevice/);
-  assert.match(response.body, /L'hote attribuera/);
-  assert.match(response.body, /Entrer dans la partie/);
+  assert.match(response.body, /Verifier la session/);
+  assert.match(response.body, /Entrer en salle d'attente/);
+  assert.match(response.body, /l'hote t'affectera ensuite un role/);
+  assert.match(response.body, /waitingRoomNotice/);
+  assert.doesNotMatch(response.body, /id="roleId"/);
   assert.match(response.body, /Declencher/);
   assert.match(response.body, /id="roleDetails"/);
   assert.match(response.body, /renderRoleDetails/);
