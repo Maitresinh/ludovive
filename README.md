@@ -77,6 +77,8 @@ For a real table test with phones on the same Wi-Fi, start the PC host mode from
 
 The script prints participant URLs such as `http://192.168.x.x:3333/play`. The dashboard also shows them in the `Acces Wi-Fi` panel. See `docs/server-reliability-and-pc-wifi.md`.
 
+For a step-by-step host checklist during a real table session, see `docs/guide-hote-pas-a-pas.md`.
+
 Sprint 1 focuses on the generic transmission loop. The API now also exposes:
 
 - `GET /health`
