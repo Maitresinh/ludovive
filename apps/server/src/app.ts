@@ -860,7 +860,7 @@ function validateModuleReferences(module: GameModule): void {
 }
 
 async function loadModules(): Promise<void> {
-  const moduleFiles = ["putsch-lite.json", "long-live-the-king-lite.json", "wolfpack-lite.json"];
+  const moduleFiles = ["putsch-lite.json", "long-live-the-king-lite.json", "wolfpack-lite.json", "origins-ww1-lite.json"];
   for (const file of moduleFiles) {
     const raw = await readFile(path.join(modulesDir(), file), "utf8");
     const parsed = moduleSchema.parse(JSON.parse(raw));
@@ -3660,6 +3660,10 @@ function renderIndex(): string {
       }
       if (input.type === "number") {
         return '<label>' + label + '</label><input type="number" min="1" value="1" data-live-input="' + input.id + '" />';
+      }
+      if (input.type === "enum") {
+        const choices = Array.isArray(input.choices) ? input.choices : [];
+        return '<label>' + label + '</label><select data-live-input="' + input.id + '">' + choices.map((choice) => option(String(choice), String(choice))).join("") + '</select>';
       }
       if (input.type === "participant") {
         return '<label>' + label + '</label><select data-live-input="' + input.id + '">' + dashboardActionParticipantOptions(session) + '</select>';

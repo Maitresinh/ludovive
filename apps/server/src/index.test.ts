@@ -439,6 +439,7 @@ test("loads module mechanics and links actions to them", async () => {
   const putschSummary = modules.find((module: JsonObject) => module.id === "putsch-lite");
   const wolfpackSummary = modules.find((module: JsonObject) => module.id === "wolfpack-lite");
   const kingSummary = modules.find((module: JsonObject) => module.id === "long-live-the-king-lite");
+  const originsSummary = modules.find((module: JsonObject) => module.id === "origins-ww1-lite");
 
   assert.equal(putschSummary.mechanics, 6);
   assert.equal(putschSummary.sessionRoles, 2);
@@ -447,6 +448,10 @@ test("loads module mechanics and links actions to them", async () => {
   assert.equal(kingSummary.components, 6);
   assert.equal(kingSummary.sessionRoles, 2);
   assert.equal(kingSummary.setup, true);
+  assert.equal(originsSummary.mechanics, 7);
+  assert.equal(originsSummary.components, 5);
+  assert.equal(originsSummary.sessionRoles, 2);
+  assert.equal(originsSummary.setup, true);
 
   const putsch = await injectJson("GET", "/modules/putsch-lite");
   const directBarter = putsch.mechanics.find((mechanic: JsonObject) => mechanic.id === "direct-barter");
@@ -501,6 +506,66 @@ test("loads module mechanics and links actions to them", async () => {
   assert.equal(king.actions.find((action: JsonObject) => action.id === "resolve-petition").effect.type, "resolvePetition");
   assert.equal(putsch.actions.find((action: JsonObject) => action.id === "embezzle-council-funds").phase, "first-council");
   assert.equal(putsch.actions.find((action: JsonObject) => action.id === "embezzle-council-funds").effect.delta, 5000);
+});
+
+test("loads Origins WWI as a live-first module without physical cards", async () => {
+  const origins = await injectJson("GET", "/modules/origins-ww1-lite");
+
+  assert.equal(origins.name, "Origins of WWI Live");
+  assert.equal(origins.uiTheme.template, "diplomatic-map");
+  assert.equal(origins.state.liveAdaptation.replacesPhysicalCards, true);
+  assert.equal(origins.resources.some((resource: JsonObject) => resource.id === "extraCards"), false);
+  assert.equal(origins.resources.some((resource: JsonObject) => resource.id === "specialActionCredits"), true);
+  assert.equal(origins.components.some((component: JsonObject) => component.id.includes("card")), false);
+  assert.equal(origins.setup.instructions.some((instruction: string) => instruction.includes("Ludovive remplace les cartes")), true);
+  assert.equal(origins.state.initialSetup.matrix["france-zone"].italy, 2);
+  assert.equal(origins.state.initialSetup.matrix["far-east"].russia, 2);
+  assert.equal(origins.state.nationalObjectives.countries.britain.objectives.find((objective: JsonObject) => objective.zoneId === "far-east").exclusivePoints, 5);
+  assert.equal(origins.state.nationalObjectives.countries.italy.specialClause.points, 5);
+  assert.equal(origins.actions.find((action: JsonObject) => action.id === "choose-secret-zones").gesture, "phone-face-down");
+  assert.equal(origins.actions.find((action: JsonObject) => action.id === "play-special-diplomatic-action").cost.specialActionCredits, 1);
+});
+
+test("runs Origins WWI secret zone programming as a pending live record", async () => {
+  const session = await createSession("origins-ww1-lite");
+  const code = session.code;
+  const device = await createDevice(code, "Telephone Londres");
+  const participant = await createParticipant(code, "Royaume-Uni", "britain");
+  await bindDevice(code, device.device.id, participant.participant.id);
+
+  assert.equal(participant.participant.resources.specialActionCredits, 1);
+  await advancePhase(code);
+  await advancePhase(code);
+
+  const model = await injectJson("GET", `/sessions/${code}/read-models/device/${device.device.id}`);
+  assert.equal(model.phase.id, "secret-programming");
+  assert.equal(model.availableActions.some((action: JsonObject) => action.id === "choose-secret-zones"), true);
+  assert.equal(model.availableActions.find((action: JsonObject) => action.id === "choose-secret-zones").inputs.length, 3);
+
+  const programming = await app.inject({
+    method: "POST",
+    url: `/sessions/${code}/events`,
+    payload: {
+      type: "action.requested",
+      actionId: "choose-secret-zones",
+      sourceDeviceId: device.device.id,
+      gesture: "phone-face-down",
+      payload: {
+        zone1: "france-zone",
+        zone2: "germany-zone",
+        zone3: "far-east"
+      }
+    }
+  });
+
+  assert.equal(programming.statusCode, 202);
+  const body = programming.json<JsonObject>();
+  assert.equal(body.actionResult.effect.type, "pendingResolution");
+  assert.equal(body.actionResult.effect.mechanicId, "secret-country-programming");
+  assert.equal(body.dashboard.pendingResolutions.length, 1);
+  assert.equal(body.dashboard.pendingResolutions[0].payload.zone1, "france-zone");
+  assert.equal(body.dashboard.pendingResolutions[0].payload.zone3, "far-east");
+  assert.equal(body.dashboard.pendingResolutions[0].phaseResolution.inputHints.length, 3);
 });
 
 test("registers devices, creates participants, and binds one device to one participant", async () => {
